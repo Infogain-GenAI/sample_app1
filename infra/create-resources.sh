@@ -3,7 +3,7 @@
 set -euo pipefail
 
 RG=${RG:-my-sample-rg}
-LOCATION=${LOCATION:-southindia}
+LOCATION=${LOCATION:-centralindia}
 ACR_NAME=${ACR_NAME:-mysampleacr}
 PLAN_NAME=${PLAN_NAME:-mysample-plan}
 WEBAPP_NAME=${WEBAPP_NAME:-mysample-webapp}
@@ -11,7 +11,7 @@ WEBAPP_NAME=${WEBAPP_NAME:-mysample-webapp}
 az group create --name "$RG" --location "$LOCATION"
 az acr create --name "$ACR_NAME" --resource-group "$RG" --sku Standard
 az appservice plan create --name "$PLAN_NAME" --resource-group "$RG" --is-linux --sku B1
-az webapp create --name "$WEBAPP_NAME" --resource-group "$RG" --plan "$PLAN_NAME" --deployment-container-image-name nginx:latest
+# az webapp create --name "$WEBAPP_NAME" --resource-group "$RG" --plan "$PLAN_NAME" --deployment-container-image-name nginx:latest
 
 LOGIN_SERVER=$(az acr show -n "$ACR_NAME" --query loginServer -o tsv)
 USER=$(az acr credential show -n "$ACR_NAME" --query username -o tsv)
