@@ -1,0 +1,28 @@
+
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>Sample App</title>
+  <style> body{font-family:system-ui,sans-serif;margin:2rem} </style>
+</head>
+<body>
+  <h1>Sample App</h1>
+  <p>FastAPI + SQLite; deployed as a container via ACR → App Service</p>
+  <form id="todo-form"><input id="title" placeholder="new todo title"/><button>Add</button></form>
+  <div id="todos"></div>
+<script>
+async function load(){
+  const items = await (await fetch('/api/todos')).json();
+  document.getElementById('todos').innerHTML = '<ul>' + items.map(i=>`<li>${i.title}</li>`).join('') + '</ul>';
+}
+document.getElementById('todo-form').addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  const title = document.getElementById('title').value;
+  await fetch('/api/todos?title=' + encodeURIComponent(title), { method: 'POST' });
+  document.getElementById('title').value = ''; load();
+});
+load();
+</script>
+</body>
+</html>

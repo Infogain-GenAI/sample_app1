@@ -1,0 +1,55 @@
+
+name: ACR - Hybrid Cleanup
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: List semantic tags (keep forever)
+        run: |
+          KEEP_TAGS=$(az acr repository show-tags \
+            --name ${{ secrets.ACR_NAME }} \
+            --repository sample-app \
+            --output tsv | grep '^v' || true)
+          echo "KEEP_TAGS=$KEEP_TAGS" >> $GITHUB_ENV
+
+      - name: List ephemeral tags
+        run: |
+          EPHEMERAL_TAGS=$(az acr repository show-tags \
+            --name ${{ secrets.ACR_NAME }} \
+            --repository sample-app \
+            --orderby time_desc \
+            --output tsv | grep -v '^v' || true)
+          echo "EPHEMERAL_TAGS=$EPHEMERAL_TAGS" >> $GITHUB_ENV
+
+      - name: Delete old ephemeral (keep last 5)
+        run: |
+          echo "$EPHEMERAL_TAGS" | tail -n +6 | while read TAG; do
+            [ -z "$TAG" ] && continue
+            az acr repository delete --name ${{ secrets.ACR_NAME }} --repository sample-app --tag "$TAG" --yes
+          done
+
+      - name: Upload cleanup summary
+        run: |
+          {
+            echo "Semantic tags kept:"
+            echo "$KEEP_TAGS"
+            echo "\nEphemeral tags kept:"
+            echo "$EPHEMERAL_TAGS" | head -n 5
+            echo "\nEphemeral tags deleted:"
+            echo "$EPHEMERAL_TAGS" | tail -n +6
+          } > cleanup_summary.txt
+        shell: bash
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cleanup-summary
+          path: cleanup_summary.txt

@@ -1,0 +1,53 @@
+
+name: CI - Build & Push to ACR
+on:
+  push: { branches: ["**"] }
+  pull_request: { types: [opened, synchronize, reopened] }
+
+env:
+  REGISTRY: ${{ secrets.ACR_NAME }}
+  IMAGE_NAME: sample-app
+
+jobs:
+  build-push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Azure login
+        uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Login to ACR
+        uses: azure/docker-login@v1
+        with:
+          login-server: ${{ env.REGISTRY }}.azurecr.io
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      - name: Set tags
+        run: |
+          SHORT_SHA=${GITHUB_SHA::8}
+          BRANCH_TAG=$(echo "${GITHUB_REF_NAME}" | tr '/' '-')
+          echo "BRANCH_TAG=$BRANCH_TAG" >> $GITHUB_ENV
+          echo "SHORT_SHA=$SHORT_SHA" >> $GITHUB_ENV
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            echo "PR_TAG=pr-${{ github.event.number }}" >> $GITHUB_ENV
+          fi
+
+      - name: Build & push
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ env.BRANCH_TAG }}-${{ env.SHORT_SHA }}
+            ${{ env.PR_TAG && format('{0}.azurecr.io/{1}:{2}', env.REGISTRY, env.IMAGE_NAME, env.PR_TAG) || '' }}
+
+      - name: Runner cleanup
+        if: always()
+        run: |
+          docker image prune -af || true
+          docker container prune -f || true
+          docker builder prune -af || true

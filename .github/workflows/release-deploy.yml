@@ -1,0 +1,63 @@
+
+name: Release - Tag & Deploy
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+
+env:
+  REGISTRY: ${{ secrets.ACR_NAME }}
+  IMAGE_NAME: sample-app
+
+jobs:
+  build-and-push-release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      - uses: azure/docker-login@v1
+        with:
+          login-server: ${{ env.REGISTRY }}.azurecr.io
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+      - uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.ref_name }}
+            ${{ env.REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}:latest
+      - name: Runner cleanup
+        if: always()
+        run: |
+          docker image prune -af || true
+          docker container prune -f || true
+          docker builder prune -af || true
+
+  deploy-appservice:
+    needs: build-and-push-release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Set container image on App Service
+        run: |
+          LOGIN_SERVER=$(az acr show -n ${{ secrets.ACR_NAME }} --query loginServer -o tsv)
+          az webapp config container set \
+            --name ${{ secrets.AZURE_WEBAPP_NAME }} \
+            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
+            --docker-custom-image-name "$LOGIN_SERVER/${{ env.IMAGE_NAME }}:${{ github.ref_name }}" \
+            --docker-registry-server-url "https://$LOGIN_SERVER" \
+            --docker-registry-server-user "${{ secrets.ACR_USERNAME }}" \
+            --docker-registry-server-password "${{ secrets.ACR_PASSWORD }}"
+
+      - name: Update app settings (env vars)
+        run: |
+          az webapp config appsettings set \
+            --name ${{ secrets.AZURE_WEBAPP_NAME }} \
+            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
+            --settings APP_NAME=sample-app DB_PATH=/home/site/wwwroot/data/app.db SECRET_KEY=prod-secret PORT=8000
