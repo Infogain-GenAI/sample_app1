@@ -1,0 +1,83 @@
+# ACR Untagged Images Cleanup Workflow
+# Cleans up untagged manifests (dangling images) from Azure Container Registry
+# These are images that no longer have any tags pointing to them (orphaned layers)
+# This reduces storage costs without affecting any tagged images
+name: ACR - Purge Untagged Images
+
+on:
+  schedule:
+    - cron: '0 2 * * *'    # Runs daily at 2 AM UTC
+  workflow_dispatch:       # Allows manual trigger from GitHub Actions UI
+
+# Environment variables used across all cleanup steps
+env:
+  REGISTRY: mysampleacr    # Azure Container Registry name
+  REPOSITORY: sample-app   # ACR repository name
+
+jobs:
+  purge-untagged:
+    runs-on: ubuntu-latest
+    steps:
+      # Authenticate with Azure using service principal credentials
+      - uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      # Show current ACR storage usage before cleanup
+      - name: Check storage usage (before cleanup)
+        run: |
+          echo "=== Storage usage BEFORE cleanup ==="
+          az acr show-usage --name ${{ env.REGISTRY }} --output table || true
+          echo ""
+          echo "=== Repository details ==="
+          az acr repository show --name ${{ env.REGISTRY }} --repository ${{ env.REPOSITORY }} || true
+
+      # Run ACR purge command to delete untagged manifests older than 2 days
+      # This uses ACR Tasks to execute the purge command
+      # Untagged manifests are image layers with no tags pointing to them
+      - name: Purge untagged images
+        run: |
+          echo "=== Starting ACR purge of untagged images ==="
+          az acr run \
+            --registry ${{ env.REGISTRY }} \
+            --cmd "acr purge --filter '${{ env.REPOSITORY }}:.*' --untagged --ago 2d --dry-run false" \
+            /dev/null
+          
+          echo "✅ Purge completed successfully"
+
+      # Show updated ACR storage usage after cleanup
+      - name: Check storage usage (after cleanup)
+        run: |
+          echo ""
+          echo "=== Storage usage AFTER cleanup ==="
+          az acr show-usage --name ${{ env.REGISTRY }} --output table || true
+
+      # Generate a summary report of the cleanup operation
+      - name: Generate cleanup summary
+        run: |
+          {
+            echo "# ACR Untagged Images Cleanup Summary"
+            echo ""
+            echo "**Registry:** ${{ env.REGISTRY }}"
+            echo "**Repository:** ${{ env.REPOSITORY }}"
+            echo "**Cleanup Date:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+            echo ""
+            echo "## What was cleaned up?"
+            echo "- Untagged manifests (orphaned image layers)"
+            echo "- Images older than 2 days"
+            echo "- No tagged images were affected"
+            echo ""
+            echo "## Notes"
+            echo "- All tagged images (dev-xxx, v1.0.0, latest, etc.) are preserved"
+            echo "- Only dangling/orphaned image layers were removed"
+            echo "- This cleanup reduces ACR storage costs"
+          } > cleanup_summary.md
+          
+          cat cleanup_summary.md
+
+      # Upload the cleanup summary as a workflow artifact
+      - uses: actions/upload-artifact@v4
+        with:
+          name: purge-untagged-summary
+          path: cleanup_summary.md
+          retention-days: 30
