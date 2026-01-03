@@ -114,42 +114,89 @@ git push origin dev
 
 ## CI/CD Workflows
 
-### Development Workflow (Automatic)
+This project uses multiple GitHub Actions workflows for different purposes:
 
-Triggered on every push to `dev` branch:
+### Active Workflows
 
+#### 1. Development Build & Deploy
+**File:** `.github/workflows/dev_mysamplewebapp001.yml`  
+**Trigger:** Push to `dev` branch or manual run
+
+**What it does:**
 1. Builds Docker image
 2. Tags: `dev-{full-commit-sha}` and `latest`
 3. Pushes to Azure Container Registry
-4. Deploys specific version to Azure Web App
+4. Deploys the specific `dev-{sha}` version to Azure Web App
 
-### Release Workflow (Manual)
+**Note:** Uses specific version tag for deployment traceability, not `latest`
 
-Create a semantic version release:
+#### 2. Release Build & Deploy
+**File:** `.github/workflows/release-deploy.yml`  
+**Trigger:** Git tag matching `v*.*.*` pattern
 
+**Create a release (two methods):**
+
+**Method 1: Command line**
 ```bash
-# Create and push a version tag
 git tag v1.0.0
 git push origin v1.0.0
 ```
 
-This triggers:
+**Method 2: GitHub UI (Recommended)**
+1. Go to Releases → Draft a new release
+2. Create tag: `v1.0.0` (or any `v*.*.*` format)
+3. Add release notes
+4. Click "Publish release"
+
+**Both methods trigger the same workflow:**
 1. Build Docker image
 2. Tags: `v1.0.0`, `latest`, `{commit-sha}`
 3. Push to ACR
 4. Deploy to production
 
-### Cleanup Workflows (Scheduled)
+#### 3. ACR Tag Cleanup
+**File:** `.github/workflows/acr-cleanup.yml`  
+**Schedule:** Every 30 minutes  
+**Purpose:** Maintains registry hygiene
 
-**Tag Cleanup** (Daily 3 AM UTC):
 - Keeps all semantic versions (`v*.*.*`) forever
-- Keeps last 5 ephemeral tags (`dev-*`, `pr-*`)
+- Keeps last 5 ephemeral tags (`dev-*`, `main-*`)
 - Deletes older ephemeral tags
 
-**Untagged Images Cleanup** (Daily 2 AM UTC):
-- Removes orphaned image layers
+#### 4. ACR Untagged Images Cleanup
+**File:** `.github/workflows/acr-purge-untagged.yml`  
+**Schedule:** Daily at 2 AM UTC  
+**Purpose:** Removes orphaned image layers
+
 - Deletes untagged manifests older than 2 days
-- Reduces storage costs
+- Preserves all tagged images
+- Shows storage usage before/after
+
+### Optional: Pull Request Tagging
+
+**File:** `misc/build-push.yml` (currently inactive)
+
+To enable PR tagging support:
+
+```bash
+# Copy workflow to active directory
+cp misc/build-push.yml .github/workflows/build-push.yml
+git add .github/workflows/build-push.yml
+git commit -m "Enable PR tagging workflow"
+git push
+```
+
+**Once enabled:**
+- Every PR automatically gets tagged as `pr-{number}`
+- Example: PR #42 creates `mysampleacr.azurecr.io/sample-app:pr-42`
+- Useful for testing specific PR builds
+
+**Test PR tagging:**
+1. Create feature branch: `git checkout -b feature/test-pr`
+2. Make changes: `echo "test" > test.txt`
+3. Commit and push: `git add . && git commit -m "test" && git push origin feature/test-pr`
+4. Open Pull Request on GitHub
+5. Check workflow logs for `pr-{number}` tag
 
 ## Tagging Strategy
 
