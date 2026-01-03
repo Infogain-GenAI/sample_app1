@@ -95,7 +95,10 @@ Add these secrets in your GitHub repository:
 
 ## CI/CD Workflows
 
-### 1. Development Build & Deploy (dev_mysamplewebapp001.yml)
+### Active Workflows (in .github/workflows/)
+
+#### 1. Development Build & Deploy (dev_mysamplewebapp001.yml)
+- **Location:** `.github/workflows/dev_mysamplewebapp001.yml`
 - **Trigger:** Push to `dev` branch or manual
 - **Actions:**
   - Builds Docker image
@@ -103,25 +106,58 @@ Add these secrets in your GitHub repository:
   - Deploys the specific `dev-{full-sha}` tag to production
 - **Note:** Deploys specific version for traceability, not `latest`
 
-### 2. Release Build & Deploy (release-deploy.yml)
+#### 2. Release Build & Deploy (release-deploy.yml)
+- **Location:** `.github/workflows/release-deploy.yml`
 - **Trigger:** Git tag matching `v*.*.*` (e.g., v1.0.0) or manual
+- **Can trigger from:** Command line OR GitHub UI (both work identically)
 - **Actions:**
   - Builds Docker image
   - Tags: `v1.0.0`, `latest`, and `{commit-sha}`
   - Deploys the semantic version tag to production
-- **Creating a release:**
+- **Creating a release (two methods):**
+  - **Command line:**
     ```bash
     git tag v1.0.0
     git push origin v1.0.0
     ```
-  Or via GitHub UI: Releases → Draft a new release → Create tag
+  - **GitHub UI:** Releases → Draft a new release → Create tag → Publish
+    - Recommended for better visibility and release notes
 
-### 3. Multi-Branch Build (build-push.yml)
+#### 3. ACR Tag Cleanup (acr-cleanup.yml)
+- **Location:** `.github/workflows/acr-cleanup.yml`
+- **Schedule:** Every 30 minutes
+- **Purpose:** Removes old ephemeral tags, keeps semantic versions
+
+#### 4. ACR Untagged Images Cleanup (acr-purge-untagged.yml)
+- **Location:** `.github/workflows/acr-purge-untagged.yml`
+- **Schedule:** Daily at 2 AM UTC
+- **Purpose:** Removes orphaned image layers
+
+### Optional Workflow (in misc/ folder - not active)
+
+#### Multi-Branch Build with PR Support (build-push.yml)
+- **Location:** `misc/build-push.yml` (needs to be moved to activate)
 - **Trigger:** Push to any branch or pull request
 - **Actions:**
   - Builds and pushes images with ephemeral tags
+  - Creates `pr-{number}` tags for pull requests
   - Deploys to dev environment only when pushing to `dev` branch
-  - PR builds are tagged as `pr-{number}`
+  
+**To activate PR tagging:**
+```bash
+# Copy to workflows folder
+cp misc/build-push.yml .github/workflows/build-push.yml
+git add .github/workflows/build-push.yml
+git commit -m "Enable PR tagging workflow"
+git push
+```
+
+**To test PR tags:**
+1. Create a feature branch: `git checkout -b feature/test-pr`
+2. Make changes and push: `git push origin feature/test-pr`
+3. Open a Pull Request via GitHub UI
+4. Workflow creates image tagged as `pr-{PR-number}`
+5. Verify: `az acr repository show-tags --name mysampleacr --repository sample-app | grep pr-`
 
 ---
 
@@ -216,3 +252,75 @@ Update your Personal Access Token (PAT) to include the `workflow` scope.
 ---
 
 For more details, see workflow files and scripts in the repository.
+
+ **sample GitHub Actions workflow YAML** that uses **conditional filters** (`on.push.branches` and `on.pull_request.paths`) to avoid unnecessary builds. This way, your CI/CD pipeline only runs when relevant files or branches are updated.
+
+---
+
+## 📝 Sample Workflow: Conditional Build & Deploy
+
+```yaml
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main         # Only run on pushes to main
+      - dev          # Also run on dev branch
+    paths:
+      - 'src/**'     # Only trigger if files in src/ change
+      - '.github/workflows/**' # Trigger if workflow files change
+  pull_request:
+    branches:
+      - main         # Run checks for PRs targeting main
+    paths:
+      - 'src/**'     # Only run if PR changes code in src/
+      - 'tests/**'   # Or if PR changes test files
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Run tests
+        run: npm test
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'   # Only deploy from main branch
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Deploy to Azure Web App
+        uses: azure/webapps-deploy@v2
+        with:
+          app-name: my-sample-app
+          publish-profile: ${{ secrets.AZURE_WEBAPP_PUBLISH_PROFILE }}
+          package: .
+```
+
+---
+
+## 🔎 Key Highlights
+- **`on.push.branches`** → restricts builds to `main` and `dev`.  
+- **`on.push.paths`** → only triggers if files in `src/` or workflow configs change.  
+- **`on.pull_request.paths`** → ensures PR builds only run if code or tests are touched.  
+- **`if: github.ref == 'refs/heads/main'`** → deploy job runs only when pushing to `main`.  
+
+---
+
+✅ This setup avoids unnecessary builds when unrelated files (like docs or README) are changed.  
+
+Would you like me to extend this sample to also include a **scheduled nightly build (`on.schedule`)** so you can catch issues even if no one pushes code during the day?

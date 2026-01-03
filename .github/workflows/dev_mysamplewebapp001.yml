@@ -3,6 +3,13 @@
 # Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
 # More GitHub Actions for Azure: https://github.com/Azure/actions
 
+# trigger only if push or pull request to dev/main branches
+# pull_request types:
+# opened → Triggered when a new pull request is created.
+# synchronize → Triggered when commits are pushed to the source branch of an existing pull request (i.e., the PR is updated with new code).
+# reopened → Triggered when a previously closed pull request is reopened.
+
+
 name: Build and deploy container app to Azure Web App - mysamplewebapp001
 
 on:
@@ -10,6 +17,11 @@ on:
     branches:
       - dev
       - main                # Triggers on every push to dev/main branch
+  pull_request: 
+    types: [opened, synchronize, reopened]  # Trigger on PR events
+    branches:
+      - main         # Run checks for PRs targeting main
+      - dev         # Run checks for PRs targeting dev
   workflow_dispatch:       # Allows manual trigger from GitHub Actions UI
 
 # Global environment variables used across all jobs
