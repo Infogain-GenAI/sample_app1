@@ -45,6 +45,79 @@ Add these secrets in your GitHub repository:
 | `AZURE_RESOURCE_GROUP`| Azure Resource Group                                                        |
 | `ACR_USERNAME`/`ACR_PASSWORD` | Optional, for CLI deploy flow using registry credentials            |
 
+### How to Get AZURE_CREDENTIALS (Service Principal)
+
+**Prerequisites:** You need Azure AD permissions to create service principals. If you don't have permissions, ask your Azure administrator.
+
+**Step 1: Get Your Subscription ID**
+```bash
+az account show --query id -o tsv
+```
+
+**Step 2: Create Service Principal (Choose one option)**
+
+**Option A: Scoped to Resource Group (Recommended - Least Privilege)**
+```bash
+az ad sp create-for-rbac \
+  --name "github-actions-sample-app" \
+  --role Contributor \
+  --scopes /subscriptions/<SUBSCRIPTION_ID>/resourceGroups/mysamplerg \
+  --json-auth
+```
+
+**Option B: Scoped to Subscription (More Permissions)**
+```bash
+# Get subscription ID
+SUBSCRIPTION_ID=$(az account show --query id -o tsv)
+
+# Create service principal
+az ad sp create-for-rbac \
+  --name "github-actions-sample-app" \
+  --role Contributor \
+  --scopes /subscriptions/$SUBSCRIPTION_ID \
+  --json-auth
+```
+
+**Note:** The `--sdk-auth` flag is deprecated. Use `--json-auth` for newer Azure CLI versions.
+
+**Step 3: Copy the JSON Output**
+
+The command will output JSON like this:
+```json
+{
+  "clientId": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+  "clientSecret": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+  "subscriptionId": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+  "tenantId": "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
+  "activeDirectoryEndpointUrl": "https://login.microsoftonline.com",
+  "resourceManagerEndpointUrl": "https://management.azure.com/",
+  "activeDirectoryGraphResourceId": "https://graph.windows.net/",
+  "sqlManagementEndpointUrl": "https://management.core.windows.net:8443/",
+  "galleryEndpointUrl": "https://gallery.azure.com/",
+  "managementEndpointUrl": "https://management.core.windows.net/"
+}
+```
+
+**Step 4: Add to GitHub Secrets**
+1. Go to your GitHub repository: `https://github.com/Infogain-GenAI/sample_app1`
+2. Navigate to **Settings** → **Secrets and variables** → **Actions**
+3. Click **New repository secret**
+4. Name: `AZURE_CREDENTIALS`
+5. Value: Paste the **entire JSON output** from Step 3 (including curly braces)
+6. Click **Add secret**
+
+**Step 5: Verify**
+Test the cleanup workflows manually:
+1. Go to **Actions** tab in GitHub
+2. Select **ACR - Hybrid Cleanup** or **ACR - Purge Untagged Images**
+3. Click **Run workflow** → **Run workflow**
+4. Verify it completes without authentication errors
+
+**Troubleshooting:**
+- **"Insufficient privileges"**: Contact your Azure administrator to create the service principal
+- **"Login failed"**: Ensure the entire JSON is copied correctly (no extra spaces/newlines)
+- **"Subscription not found"**: Verify the subscription ID in the JSON matches your Azure subscription
+
 ---
 
 ## Local Development & Testing
