@@ -8,7 +8,8 @@ name: Build and deploy container app to Azure Web App - mysamplewebapp001
 on:
   push:
     branches:
-      - dev                # Triggers on every push to dev branch
+      - dev
+      - main                # Triggers on every push to dev/main branch
   workflow_dispatch:       # Allows manual trigger from GitHub Actions UI
 
 # Global environment variables used across all jobs
