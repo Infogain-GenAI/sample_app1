@@ -17,11 +17,7 @@ on:
     branches:
       - dev
       - main                # Triggers on every push to dev/main branch
-  pull_request: 
-    types: [opened, synchronize, reopened]  # Trigger on PR events
-    branches:
-      - main         # Run checks for PRs targeting main
-      - dev         # Run checks for PRs targeting dev
+
   workflow_dispatch:       # Allows manual trigger from GitHub Actions UI
 
 # Global environment variables used across all jobs
