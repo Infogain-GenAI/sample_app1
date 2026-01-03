@@ -18,10 +18,14 @@ jobs:
   purge-untagged:
     runs-on: ubuntu-latest
     steps:
-      # Authenticate with Azure using service principal credentials
-      - uses: azure/login@v1
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
+      # Authenticate with Azure Container Registry using admin credentials
+      # Uses the same credentials as the dev/release workflows
+      - name: Azure CLI Login with ACR credentials
+        run: |
+          az acr login \
+            --name ${{ env.REGISTRY }} \
+            --username ${{ secrets.AZUREAPPSERVICE_CONTAINERUSERNAME_AE751F0B0758459FBAE075B34C0113A6 }} \
+            --password ${{ secrets.AZUREAPPSERVICE_CONTAINERPASSWORD_2922A7ED2EEA4023AAEC4D23FDC3D55F }}
 
       # Show current ACR storage usage before cleanup
       - name: Check storage usage (before cleanup)
