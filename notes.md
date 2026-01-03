@@ -51,3 +51,22 @@ az webapp log tail -g <RG> -n <WEBAPP_NAME>.
 
 Nightly cleanup runs automatically (or trigger via Run workflow) and uploads a summary artifact.
 
+The workflow already has workflow_dispatch configured, which enables manual triggering. Here's how:
+
+Via GitHub UI:
+
+Go to your repository on GitHub: https://github.com/Infogain-GenAI/sample_app1
+Click the Actions tab
+In the left sidebar, click "ACR - Hybrid Cleanup"
+Click the "Run workflow" button (top right)
+Select the branch (usually main or dev)
+Click "Run workflow" to start
+Via GitHub CLI:
+
+
+gh workflow run "ACR - Hybrid Cleanup" --ref dev
+Via REST API:
+
+
+curl -X POST \  -H "Accept: application/vnd.github+json" \  -H "Authorization: Bearer YOUR_GITHUB_TOKEN" \  https://api.github.com/repos/Infogain-GenAI/sample_app1/actions/workflows/acr-cleanup.yml/dispatches \  -d '{"ref":"dev"}'
+The workflow will run immediately and you can view the cleanup summary in the workflow artifacts after it completes.

@@ -1,0 +1,104 @@
+# CI/CD Workflow for Production Releases
+# Builds Docker image, pushes to ACR with semantic version tags, and deploys to Azure Web App
+# Triggered by creating Git tags (e.g., v1.0.0, v2.1.3)
+# Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
+# More GitHub Actions for Azure: https://github.com/Azure/actions
+
+name: Release - Build and deploy container app to Azure Web App
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'           # Triggers on semantic version tags (v1.0.0, v2.1.3, etc.)
+      - 'V*.*.*'           # Also triggers on uppercase semantic version tags (V1.0.0, V2.1.3, etc.)
+  workflow_dispatch:       # Allows manual trigger from GitHub Actions UI
+
+# Global environment variables used across all jobs
+env:
+  REGISTRY: mysampleacr          # Azure Container Registry name (without .azurecr.io)
+  IMAGE_NAME: sample-app         # Docker image name
+
+jobs:
+  # Job 1: Build Docker image and push to ACR with semantic version tags
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read              # Required for actions/checkout to read repository contents
+
+    steps:
+      # Checkout the repository code at the specific tag
+      - uses: actions/checkout@v4
+
+      # Set up Docker Buildx for advanced build features (caching, multi-platform, etc.)
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      # Authenticate with Azure Container Registry using credentials
+      - name: Log in to container registry
+        uses: docker/login-action@v2
+        with:
+          registry: mysampleacr.azurecr.io/
+          username: ${{ secrets.AZUREAPPSERVICE_CONTAINERUSERNAME_AE751F0B0758459FBAE075B34C0113A6 }}
+          password: ${{ secrets.AZUREAPPSERVICE_CONTAINERPASSWORD_2922A7ED2EEA4023AAEC4D23FDC3D55F }}
+
+      # Extract the semantic version tag (e.g., v1.0.0)
+      # This tag represents an official release version
+      - name: Set release tag
+        run: |
+          RELEASE_TAG=${GITHUB_REF#refs/tags/}    # Extract tag name (e.g., v1.0.0)
+          echo "RELEASE_TAG=$RELEASE_TAG" >> $GITHUB_ENV
+          echo "Deploying release: $RELEASE_TAG"
+
+      # Build Docker image and push to ACR with THREE tags:
+      # 1. Semantic version tag: v1.0.0 - The official release version
+      # 2. latest tag: Always points to the most recent production release
+      # 3. Commit SHA: For exact commit traceability
+      - name: Build and push container image to registry
+        uses: docker/build-push-action@v3
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ env.RELEASE_TAG }}
+            ${{ env.REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}:latest
+            ${{ env.REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          file: ./Dockerfile
+
+  # Job 2: Deploy the semantic version tagged image to Azure Web App (Production)
+  # NOTE: We deploy the semantic version tag (v1.0.0) for clear version tracking
+  # This allows easy rollback to specific versions in production
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build                   # Wait for build job to complete successfully
+    environment:
+      name: 'Production'
+      url: ${{ steps.deploy-to-webapp.outputs.webapp-url }}
+    
+    steps:
+      # Extract the semantic version tag to deploy
+      # Extract tag name (e.g., v1.0.0)
+      - name: Set release tag
+        run: |
+          RELEASE_TAG=${GITHUB_REF#refs/tags/}    
+          echo "RELEASE_TAG=$RELEASE_TAG" >> $GITHUB_ENV
+          echo "Deploying release: $RELEASE_TAG to production"
+      
+      # Deploy to Azure Web App using the semantic version tag
+      # This provides clear version tracking in production environment
+      - name: Deploy to Azure Web App
+        id: deploy-to-webapp
+        uses: azure/webapps-deploy@v2
+        with:
+          app-name: 'mysamplewebapp001'
+          slot-name: 'Production'
+          # IMPORTANT: Deploys the semantic version tag (v1.0.0)
+          # Format: mysampleacr.azurecr.io/sample-app:v1.0.0
+          images: '${{ env.REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ env.RELEASE_TAG }}'
+          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_999A64788F3249A485FB504B2AD16316 }}
+      
+      # Log successful deployment with version information
+      - name: Deployment summary
+        run: |
+          echo "Successfully deployed release ${{ env.RELEASE_TAG }} to production"
+          echo "Application URL: ${{ steps.deploy-to-webapp.outputs.webapp-url }}"
+          echo "Docker image: ${{ env.REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ env.RELEASE_TAG }}"
