@@ -1,0 +1,176 @@
+# Promote Existing Dev Build to Production Release
+# This workflow promotes (retags) the latest dev build to a production release version
+# WITHOUT rebuilding the image - just adds a new semantic version tag
+# Useful for promoting tested dev builds to production quickly
+
+name: Promote Dev Build to Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: 'Release version (e.g., v1.0.0, v2.1.3)'
+        required: true
+        type: string
+      dev_tag:
+        description: 'Dev tag to promote (leave empty for latest)'
+        required: false
+        type: string
+        default: 'latest'
+
+# Global environment variables
+env:
+  REGISTRY: mysampleacr
+  IMAGE_NAME: sample-app
+
+jobs:
+  # Job 1: Retag existing dev image with release version
+  promote:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      # Authenticate with Azure Container Registry
+      - name: Log in to container registry
+        uses: docker/login-action@v2
+        with:
+          registry: ${{ env.REGISTRY }}.azurecr.io/
+          username: ${{ secrets.AZUREAPPSERVICE_CONTAINERUSERNAME_AE751F0B0758459FBAE075B34C0113A6 }}
+          password: ${{ secrets.AZUREAPPSERVICE_CONTAINERPASSWORD_2922A7ED2EEA4023AAEC4D23FDC3D55F }}
+
+      # Validate release version format
+      - name: Validate release version
+        run: |
+          RELEASE_VERSION="${{ github.event.inputs.release_version }}"
+          if [[ ! "$RELEASE_VERSION" =~ ^[vV][0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9]+)?$ ]]; then
+            echo " Error: Invalid release version format. Expected: v1.0.0 or v1.0.0-beta"
+            exit 1
+          fi
+          echo " Valid release version: $RELEASE_VERSION"
+          echo "RELEASE_VERSION=$RELEASE_VERSION" >> $GITHUB_ENV
+
+      # Pull the dev image that we want to promote
+      # NOTE: This does NOT delete the dev tag - it remains in ACR
+      - name: Pull dev image
+        run: |
+          DEV_TAG="${{ github.event.inputs.dev_tag }}"
+          echo "Pulling dev image: ${{ env.REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}:${DEV_TAG}"
+          docker pull ${{ env.REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}:${DEV_TAG}
+          
+          # Get the image digest for verification
+          IMAGE_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' ${{ env.REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}:${DEV_TAG})
+          echo "IMAGE_DIGEST=$IMAGE_DIGEST" >> $GITHUB_ENV
+          echo "Source image digest: $IMAGE_DIGEST"
+
+      # Create additional tags pointing to the SAME image
+      # IMPORTANT: The original dev tag is NOT removed - both tags will exist
+      # Creates THREE NEW tags (all pointing to the same image digest as dev tag)
+      - name: Create release tags (dev tag remains unchanged)
+        run: |
+          SOURCE_IMAGE="${{ env.REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.event.inputs.dev_tag }}"
+          
+          # Tag 1: Semantic version (v1.0.0)
+          docker tag $SOURCE_IMAGE ${{ env.REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ env.RELEASE_VERSION }}
+          
+          # Tag 2: Update latest to point to this release
+          docker tag $SOURCE_IMAGE ${{ env.REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}:latest
+          
+          # Tag 3: Promoted tag for audit trail
+          docker tag $SOURCE_IMAGE ${{ env.REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}:promoted-${{ env.RELEASE_VERSION }}
+          
+          echo " Created 3 new tags pointing to same image"
+          echo "   Original dev tag '${{ github.event.inputs.dev_tag }}' remains in ACR"
+
+      # Push all new tags to ACR (original dev tag is untouched)
+      - name: Push release tags to registry
+        run: |
+          echo "Pushing release version: ${{ env.RELEASE_VERSION }}"
+          docker push ${{ env.REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ env.RELEASE_VERSION }}
+          docker push ${{ env.REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}:latest
+          docker push ${{ env.REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}:promoted-${{ env.RELEASE_VERSION }}
+          
+          echo " Successfully promoted dev build to release ${{ env.RELEASE_VERSION }}"
+          echo "   Dev tag '${{ github.event.inputs.dev_tag }}' still exists in ACR"
+
+      # Verify both original and new tags exist in ACR
+      - name: Verify tags in ACR
+        run: |
+          echo "=== Verifying all tags exist in ACR ==="
+          
+          # Check if dev tag still exists
+          if az acr repository show-tags \
+              --name ${{ env.REGISTRY }} \
+              --repository ${{ env.IMAGE_NAME }} \
+              --output tsv 2>/dev/null | grep -q "^${{ github.event.inputs.dev_tag }}$"; then
+            echo " Original dev tag exists: ${{ github.event.inputs.dev_tag }}"
+          else
+            echo " Warning: Dev tag not found (this is unexpected)"
+          fi
+          
+          # Check if release tag exists
+          if az acr repository show-tags \
+              --name ${{ env.REGISTRY }} \
+              --repository ${{ env.IMAGE_NAME }} \
+              --output tsv 2>/dev/null | grep -q "^${{ env.RELEASE_VERSION }}$"; then
+            echo " Release tag exists: ${{ env.RELEASE_VERSION }}"
+          else
+            echo "Error: Release tag not found"
+            exit 1
+          fi
+          
+          echo ""
+          echo " Promotion verified: Both dev and release tags exist"
+        env:
+          AZURE_CORE_ONLY_SHOW_ERRORS: true
+
+      # Summary of promotion showing all tags
+      - name: Promotion summary
+        run: |
+          echo "=== Promotion Complete ==="
+          echo ""
+          echo " Same Image, Multiple Tags:"
+          echo "   Image Digest: ${{ env.IMAGE_DIGEST }}"
+          echo ""
+          echo "  Tags (all point to same image):"
+          echo "   - ${{ github.event.inputs.dev_tag }} (ORIGINAL - kept)"
+          echo "   - ${{ env.RELEASE_VERSION }} (NEW - release)"
+          echo "   - latest (NEW - updated)"
+          echo "   - promoted-${{ env.RELEASE_VERSION }} (NEW - audit trail)"
+          echo ""
+          echo " ACR Repository: ${{ env.REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}"
+
+  # Job 2: Deploy the promoted release to Azure Web App (Production)
+  deploy:
+    runs-on: ubuntu-latest
+    needs: promote
+    environment:
+      name: 'Production'
+      url: ${{ steps.deploy-to-webapp.outputs.webapp-url }}
+    
+    steps:
+      # Set the release version for deployment
+      - name: Set release version
+        run: |
+          RELEASE_VERSION="${{ github.event.inputs.release_version }}"
+          echo "RELEASE_VERSION=$RELEASE_VERSION" >> $GITHUB_ENV
+          echo "Deploying promoted release: $RELEASE_VERSION to production"
+      
+      # Deploy to Azure Web App using the promoted release version
+      - name: Deploy to Azure Web App
+        id: deploy-to-webapp
+        uses: azure/webapps-deploy@v2
+        with:
+          app-name: 'mysamplewebapp001'
+          slot-name: 'Production'
+          # Deploy the promoted semantic version tag
+          images: '${{ env.REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ env.RELEASE_VERSION }}'
+          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_999A64788F3249A485FB504B2AD16316 }}
+      
+      # Log successful deployment
+      - name: Deployment summary
+        run: |
+          echo " Successfully deployed promoted release ${{ env.RELEASE_VERSION }} to production"
+          echo "Application URL: ${{ steps.deploy-to-webapp.outputs.webapp-url }}"
+          echo "Docker image: ${{ env.REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ env.RELEASE_VERSION }}"
+          echo "Original dev tag: ${{ github.event.inputs.dev_tag }}"
