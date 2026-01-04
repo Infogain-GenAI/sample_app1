@@ -1,0 +1,107 @@
+# CI/CD Workflow for Development Environment
+# Builds Docker image, pushes to ACR, and deploys to Azure Web App
+# Docs for the Azure Web Apps Deploy action: https://github.com/Azure/webapps-deploy
+# More GitHub Actions for Azure: https://github.com/Azure/actions
+
+# trigger only if push or pull request to dev/main branches
+# pull_request types:
+# opened → Triggered when a new pull request is created.
+# synchronize → Triggered when commits are pushed to the source branch of an existing pull request (i.e., the PR is updated with new code).
+# reopened → Triggered when a previously closed pull request is reopened.
+
+
+name: Build and deploy container app to Azure Web App - mysamplewebapp001
+
+on:
+  push:
+    branches:
+      - main                # Triggers on every push to main branch
+
+  workflow_dispatch:       # Allows manual trigger from GitHub Actions UI
+
+# Global environment variables used across all jobs
+env:
+  REGISTRY: mysampleprodacr          # Azure Container Registry name (without .azurecr.io)
+  IMAGE_NAME: sample-app         # Docker image name
+
+jobs:
+  # Job 1: Build Docker image and push to ACR with multiple tags
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read              # Required for actions/checkout to read repository contents
+
+    steps:
+      # Checkout the repository code
+      - uses: actions/checkout@v4
+
+      # Set up Docker Buildx for advanced build features (caching, multi-platform, etc.)
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      # Authenticate with Azure Container Registry using credentials
+      - name: Log in to container registry
+        uses: docker/login-action@v2
+        with:
+          registry:  ${{ env.REGISTRY }}.azurecr.io/
+          username: ${{ secrets.PROD_ACR_USERNAME }}
+          password: ${{ secrets.PROD_ACR_PASSWORD }}
+
+      # Generate image tags: One specific tag (branch-sha) and one generic tag (latest)
+      # Example: dev-abc123def456... (specific) and latest (generic)
+      # Full commit SHA (40 chars)
+      # Branch name with / replaced by -   
+      - name: Set tags
+        run: |
+          IMAGE_SHA=${GITHUB_SHA}                                   
+          BRANCH_TAG=$(echo "${GITHUB_REF_NAME}" | tr '/' '-')      
+          echo "BRANCH_TAG=$BRANCH_TAG" >> $GITHUB_ENV
+          echo "IMAGE_SHA=$IMAGE_SHA" >> $GITHUB_ENV
+
+      # Build Docker image and push to ACR with TWO tags:
+      # 1. Specific tag: {branch}-{full-sha} - For tracking exact build version
+      # 2. Generic tag: latest - For easy reference to most recent dev build
+      - name: Build and push container image to registry
+        uses: docker/build-push-action@v3
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ env.BRANCH_TAG }}-${{ env.IMAGE_SHA }}
+            ${{ env.REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}:latest
+          file: ./Dockerfile
+
+  # Job 2: Deploy the SPECIFIC versioned image (NOT latest) to Azure Web App
+  # NOTE: We deploy the specific branch-sha tag for traceability, not the 'latest' tag
+  # This ensures we know exactly which commit is running in app service 
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build                   # Wait for build job to complete successfully
+    environment:
+      name: 'Production'
+      url: ${{ steps.deploy-to-webapp.outputs.webapp-url }}
+    
+    steps:
+      # Recreate the SAME specific image tag that was built in the previous job
+      # This ensures deployment uses the exact versioned image, not 'latest'
+      # Same full SHA as build job
+      # Same branch tag as build job
+      - name: Set image tag
+        run: |
+          IMAGE_SHA=${GITHUB_SHA}                                    
+          BRANCH_TAG=$(echo "${GITHUB_REF_NAME}" | tr '/' '-')     
+          echo "BRANCH_TAG=$BRANCH_TAG" >> $GITHUB_ENV
+          echo "IMAGE_SHA=$IMAGE_SHA" >> $GITHUB_ENV
+      
+      # Deploy to Azure Web App using the SPECIFIC versioned tag (branch-sha)
+      # NOT using 'latest' - this provides better audit trail and rollback capability
+      - name: Deploy to Azure Web App
+        id: deploy-to-webapp
+        uses: azure/webapps-deploy@v2
+        with:
+          app-name: 'mysamplewebapp001-prod'
+          slot-name: 'Production'
+          # IMPORTANT: Deploys the specific versioned image, not 'latest'
+          # Format: mysampleacr.azurecr.io/sample-app:dev-abc123def456...
+          images: '${{ env.REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ env.BRANCH_TAG }}-${{ env.IMAGE_SHA }}'
+          publish-profile: ${{ secrets.PROD_WEBAPP_PUBLISHPROFILE }}
