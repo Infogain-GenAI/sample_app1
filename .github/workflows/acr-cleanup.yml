@@ -4,13 +4,12 @@
 # - Keeps all semantic version tags (v*.*.* releases) forever
 # - Keeps only the last 5 ephemeral tags (branch-based and PR tags)
 # - Automatically deletes older ephemeral tags to save storage costs
-name: ACR - Hybrid Cleanup
+name: ACR -  Cleanup
 
 on:
   schedule:
-     - cron: '0 1 * * *'    # Runs daily at 1 AM UTC
-
-   # - cron: '0,30 * * * *'  # Runs every half hour (at minute 0 and 30 of each hour)
+    - cron: '0 1 * * *'    # Runs daily at 1 AM UTC
+    # - cron: '0,30 * * * *'  # Runs every half hour (at minute 0 and 30 of each hour)
   workflow_dispatch:      # Allows manual trigger from GitHub Actions UI
 
 # Environment variables used across all cleanup steps
@@ -63,16 +62,42 @@ jobs:
           done
 
       # Step 4: Generate a summary report of cleanup actions
-      - name: Upload cleanup summary
+      - name: Generate cleanup summary
         run: |
+          SEMANTIC_COUNT=$(echo "$KEEP_TAGS" | grep -c . || echo 0)
+          EPHEMERAL_TOTAL=$(echo "$EPHEMERAL_TAGS" | grep -c . || echo 0)
+          EPHEMERAL_KEPT=$(echo "$EPHEMERAL_TAGS" | head -n 5 | grep -c . || echo 0)
+          EPHEMERAL_DELETED=$(echo "$EPHEMERAL_TAGS" | tail -n +6 | grep -c . || echo 0)
+          
           {
-            echo "Semantic tags kept:"
-            echo "$KEEP_TAGS"
-            echo "\nEphemeral tags kept:"
-            echo "$EPHEMERAL_TAGS" | head -n 5  # Show the 5 most recent ephemeral tags
-            echo "\nEphemeral tags deleted:"
-            echo "$EPHEMERAL_TAGS" | tail -n +6  # Show the deleted tags (6th tag onwards)
+            echo "=== ACR Cleanup Summary ==="
+            echo ""
+            echo "=== KEPT (Never Deleted) ==="
+            echo "All semantic version tags ($SEMANTIC_COUNT):"
+            if [ "$SEMANTIC_COUNT" -gt 0 ]; then
+              echo "$KEEP_TAGS" | sed 's/^/  - /'
+            else
+              echo "  (none found)"
+            fi
+            echo ""
+            echo "Last 5 ephemeral tags ($EPHEMERAL_KEPT):"
+            if [ "$EPHEMERAL_KEPT" -gt 0 ]; then
+              echo "$EPHEMERAL_TAGS" | head -n 5 | sed 's/^/  - /'
+            else
+              echo "  (none found)"
+            fi
+            echo ""
+            echo "=== DELETED (Older Ephemeral) ==="
+            echo "Ephemeral tags deleted ($EPHEMERAL_DELETED):"
+            if [ "$EPHEMERAL_DELETED" -gt 0 ]; then
+              echo "$EPHEMERAL_TAGS" | tail -n +6 | sed 's/^/  - /'
+            else
+              echo "  (none deleted - within limit)"
+            fi
           } > cleanup_summary.txt
+          
+          echo "Summary generated:"
+          cat cleanup_summary.txt
         shell: bash
 
       # Step 5: Upload the cleanup summary as a workflow artifact for review

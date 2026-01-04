@@ -122,11 +122,20 @@ echo -e "${YELLOW} Found $DELETE_COUNT ephemeral tags to delete${NC}"
 echo ""
 
 # Step 3: Show what will be kept and deleted
-echo -e "${GREEN}Keeping (last $KEEP_COUNT ephemeral):${NC}"
+echo -e "${GREEN}=== KEEPING (Never Deleted) ===${NC}"
+echo -e "${GREEN}All semantic version tags ($SEMANTIC_COUNT):${NC}"
+if [ "$SEMANTIC_COUNT" -gt 0 ]; then
+    echo "$SEMANTIC_TAGS" | sed 's/^/  ✓ /'
+else
+    echo "  (none found)"
+fi
+echo ""
+
+echo -e "${GREEN}Last $KEEP_COUNT ephemeral tags:${NC}"
 echo "$EPHEMERAL_TAGS" | head -n "$KEEP_COUNT" | sed 's/^/  ✓ /'
 echo ""
 
-echo -e "${YELLOW}Deleting (older ephemeral):${NC}"
+echo -e "${YELLOW}=== DELETING (Older Ephemeral) ===${NC}"
 echo "$TAGS_TO_DELETE" | sed 's/^/  ✗ /'
 echo ""
 
@@ -137,7 +146,7 @@ if [[ "${4:-}" != "--yes" ]]; then
 fi
 
 # Step 5: Delete old ephemeral tags
-echo -e "${BLUE}Step 2: Deleting old ephemeral tags...${NC}"
+echo -e "${BLUE}Step 5: Deleting old ephemeral tags...${NC}"
 DELETED=0
 FAILED=0
 
@@ -178,4 +187,4 @@ echo -e "${BLUE}Current ACR storage usage:${NC}"
 az acr show-usage --name "$REGISTRY_NAME" --output table || true
 
 echo ""
-echo -e "${GREEN}s Cleanup completed successfully${NC}"
+echo -e "${GREEN}Cleanup completed successfully${NC}"
