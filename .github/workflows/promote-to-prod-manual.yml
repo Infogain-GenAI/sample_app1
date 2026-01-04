@@ -5,7 +5,7 @@
 # - Pushes release copy to PROD ACR (for production deployment)
 # - Deploys from PROD ACR to PROD App Service
 
-name: Manual Promote Dev to Release  (Both ACRs)
+name: Manual Promote Dev to Prod ACR Release  (Both ACRs)
 
 on:
   workflow_dispatch:

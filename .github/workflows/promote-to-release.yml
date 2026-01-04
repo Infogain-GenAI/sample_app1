@@ -3,7 +3,7 @@
 # WITHOUT rebuilding the image - just adds a new semantic version tag
 # Useful for promoting tested dev builds to production quickly
 
-name: Promote Dev Build to Release
+name: Promote Dev to Dev ACR Release
 
 on:
   workflow_dispatch:
