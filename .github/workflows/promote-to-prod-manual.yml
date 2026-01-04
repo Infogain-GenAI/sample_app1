@@ -170,7 +170,7 @@ jobs:
         id: deploy-to-webapp
         uses: azure/webapps-deploy@v2
         with:
-          app-name: 'mysamplewebappprod001'
+          app-name: 'mysamplewebapp001-prod'
           slot-name: 'Production'
           # Deploy from PROD ACR (not DEV ACR)
           images: '${{ env.PROD_REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ env.RELEASE_VERSION }}'

@@ -161,7 +161,7 @@ jobs:
         id: deploy-to-webapp
         uses: azure/webapps-deploy@v2
         with:
-          app-name: 'mysamplewebapp001'
+          app-name: 'mysamplewebapp001-prod'
           slot-name: 'Production'
           # Deploy the promoted semantic version tag
           images: '${{ env.REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ env.RELEASE_VERSION }}'
