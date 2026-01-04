@@ -5,10 +5,14 @@
 # - Pushes release copy to PROD ACR (for production deployment)
 # - Deploys from PROD ACR to PROD App Service
 
-name: Promote Dev to Release 1 (Both ACRs)
+name: Promote Dev to Release 2 (Both ACRs)
 
 on:
-  workflow_dispatch:
+  push:
+    tags:
+      - 'v*.*.*'           # Triggers on semantic version tags (v1.0.0, v2.1.3, etc.)
+      - 'V*.*.*'           # Also triggers on uppercase semantic version tags (V1.0.0, V2.1.3, etc.)
+  workflow_dispatch:       # Allows manual trigger from GitHub Actions UI
     inputs:
       release_version:
         description: 'Release version (e.g., v1.0.0, v2.1.3)'
@@ -33,16 +37,38 @@ jobs:
       contents: read
 
     steps:
-      # Validate release version format
-      - name: Validate release version
+      # Free up disk space before starting
+      - name: Docker system prune before start
         run: |
-          RELEASE_VERSION="${{ github.event.inputs.release_version }}"
+          echo "Pruning unused Docker data before workflow..."
+          docker system prune -af --volumes
+
+      # Determine release version from tag push or manual input
+      - name: Set release version
+        run: |
+          # Check if triggered by tag push
+          if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == refs/tags/* ]]; then
+            # Extract version from tag
+            RELEASE_VERSION="${GITHUB_REF#refs/tags/}"
+            DEV_TAG="latest"
+            echo "Triggered by tag push: $RELEASE_VERSION"
+          else
+            # Use manual input
+            RELEASE_VERSION="${{ github.event.inputs.release_version }}"
+            DEV_TAG="${{ github.event.inputs.dev_tag }}"
+            echo "Triggered manually: $RELEASE_VERSION"
+          fi
+          
+          # Validate version format
           if [[ ! "$RELEASE_VERSION" =~ ^[vV][0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9]+)?$ ]]; then
-            echo " Error: Invalid release version format. Expected: v1.0.0 or v1.0.0-beta"
+            echo "Error: Invalid release version format. Expected: v1.0.0 or v1.0.0-beta"
             exit 1
           fi
-          echo " Valid release version: $RELEASE_VERSION"
+          
+          echo "Valid release version: $RELEASE_VERSION"
+          echo "Dev tag to promote: $DEV_TAG"
           echo "RELEASE_VERSION=$RELEASE_VERSION" >> $GITHUB_ENV
+          echo "DEV_TAG=$DEV_TAG" >> $GITHUB_ENV
 
       # Authenticate with DEV ACR
       - name: Log in to DEV ACR
@@ -60,18 +86,10 @@ jobs:
           username: ${{ secrets.PROD_ACR_USERNAME }}
           password: ${{ secrets.PROD_ACR_PASSWORD }}
 
-      
-      # Free up disk space after pulling and tagging, before pushing
-      - name: Docker system prune before push
-        run: |
-          echo "Pruning unused Docker data before push..."
-          docker system prune -af --volumes
-
       # Pull the tested dev image
       - name: Pull dev image from DEV ACR
         run: |
-          DEV_TAG="${{ github.event.inputs.dev_tag }}"
-          SOURCE_IMAGE="${{ env.DEV_REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}:${DEV_TAG}"
+          SOURCE_IMAGE="${{ env.DEV_REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ env.DEV_TAG }}"
           
           echo "Pulling tested image from DEV ACR..."
           echo "Source: $SOURCE_IMAGE"
@@ -85,7 +103,7 @@ jobs:
       # Tag for DEV ACR (keep release copy in DEV ACR)
       - name: Tag release for DEV ACR
         run: |
-          SOURCE_IMAGE="${{ env.DEV_REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.event.inputs.dev_tag }}"
+          SOURCE_IMAGE="${{ env.DEV_REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ env.DEV_TAG }}"
           
           echo "Creating release tags in DEV ACR..."
           
@@ -96,7 +114,7 @@ jobs:
       # Tag for PROD ACR (production release)
       - name: Tag release for PROD ACR
         run: |
-          SOURCE_IMAGE="${{ env.DEV_REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.event.inputs.dev_tag }}"
+          SOURCE_IMAGE="${{ env.DEV_REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ env.DEV_TAG }}"
           
           echo "Creating release tags in PROD ACR..."
           
@@ -136,12 +154,12 @@ jobs:
           echo "=== Promotion Complete ==="
           echo ""
           echo "Source:"
-          echo "   ${{ env.DEV_REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.event.inputs.dev_tag }}"
+          echo "   ${{ env.DEV_REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ env.DEV_TAG }}"
           echo "   Digest: ${{ env.IMAGE_DIGEST }}"
           echo ""
           echo "DEV ACR (backup copy):"
           echo "    ${{ env.DEV_REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ env.RELEASE_VERSION }}"
-          echo "    ${{ env.DEV_REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ github.event.inputs.dev_tag }} (kept)"
+          echo "    ${{ env.DEV_REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ env.DEV_TAG }} (kept)"
           echo ""
           echo "PROD ACR (production):"
           echo "    ${{ env.PROD_REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ env.RELEASE_VERSION }}"
@@ -158,12 +176,17 @@ jobs:
       url: ${{ steps.deploy-to-webapp.outputs.webapp-url }}
     
     steps:
-      # Set release version
+      # Set release version from tag or manual input
       - name: Set release version
         run: |
-          RELEASE_VERSION="${{ github.event.inputs.release_version }}"
+          # Check if triggered by tag push
+          if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == refs/tags/* ]]; then
+            RELEASE_VERSION="${GITHUB_REF#refs/tags/}"
+          else
+            RELEASE_VERSION="${{ github.event.inputs.release_version }}"
+          fi
           echo "RELEASE_VERSION=$RELEASE_VERSION" >> $GITHUB_ENV
-          echo "Deploying to PROD App Service from PROD ACR"
+          echo "Deploying to PROD App Service from PROD ACR: $RELEASE_VERSION"
       
       # Deploy to PROD Web App from PROD ACR
       - name: Deploy to PROD App Service

@@ -15,7 +15,7 @@ on:
 
 # Global environment variables used across all jobs
 env:
-  REGISTRY: mysampleprodacr          # Azure Container Registry name (without .azurecr.io)
+  REGISTRY: mysampleprodacr      # Azure Container Registry name (without .azurecr.io)
   IMAGE_NAME: sample-app         # Docker image name
 
 jobs:
@@ -37,7 +37,7 @@ jobs:
       - name: Log in to container registry
         uses: docker/login-action@v2
         with:
-          registry: mysampleacr.azurecr.io/
+          registry: ${{ env.REGISTRY }}.azurecr.io/
           username: ${{ secrets.PROD_ACR_USERNAME }}
           password: ${{ secrets.PROD_ACR_PASSWORD }}
 
@@ -89,7 +89,7 @@ jobs:
         id: deploy-to-webapp
         uses: azure/webapps-deploy@v2
         with:
-          app-name: 'mysamplewebapp001'
+          app-name: 'mysamplewebapp001-prod'
           slot-name: 'Production'
           # IMPORTANT: Deploys the semantic version tag (v1.0.0)
           # Format: mysampleacr.azurecr.io/sample-app:v1.0.0
