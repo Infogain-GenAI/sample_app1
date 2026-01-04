@@ -45,8 +45,8 @@ jobs:
         uses: docker/login-action@v2
         with:
           registry: mysampleacr.azurecr.io/
-          username: ${{ secrets.AZUREAPPSERVICE_CONTAINERUSERNAME_AE751F0B0758459FBAE075B34C0113A6 }}
-          password: ${{ secrets.AZUREAPPSERVICE_CONTAINERPASSWORD_2922A7ED2EEA4023AAEC4D23FDC3D55F }}
+          username: ${{ secrets.DEV_ACR_USERNAME }}
+          password: ${{ secrets.DEV_ACR_PASSWORD }}
 
       # Generate image tags: One specific tag (branch-sha) and one generic tag (latest)
       # Example: dev-abc123def456... (specific) and latest (generic)
@@ -105,4 +105,4 @@ jobs:
           # IMPORTANT: Deploys the specific versioned image, not 'latest'
           # Format: mysampleacr.azurecr.io/sample-app:dev-abc123def456...
           images: '${{ env.REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ env.BRANCH_TAG }}-${{ env.IMAGE_SHA }}'
-          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_999A64788F3249A485FB504B2AD16316 }}
+          publish-profile: ${{ secrets.DEV_WEBAPP_PUBLISHPROFILE }}

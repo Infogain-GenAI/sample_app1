@@ -15,7 +15,7 @@ on:
 
 # Global environment variables used across all jobs
 env:
-  REGISTRY: mysampleacr          # Azure Container Registry name (without .azurecr.io)
+  REGISTRY: mysampleprodacr          # Azure Container Registry name (without .azurecr.io)
   IMAGE_NAME: sample-app         # Docker image name
 
 jobs:
@@ -38,8 +38,8 @@ jobs:
         uses: docker/login-action@v2
         with:
           registry: mysampleacr.azurecr.io/
-          username: ${{ secrets.AZUREAPPSERVICE_CONTAINERUSERNAME_AE751F0B0758459FBAE075B34C0113A6 }}
-          password: ${{ secrets.AZUREAPPSERVICE_CONTAINERPASSWORD_2922A7ED2EEA4023AAEC4D23FDC3D55F }}
+          username: ${{ secrets.PROD_ACR_USERNAME }}
+          password: ${{ secrets.PROD_ACR_PASSWORD }}
 
       # Extract the semantic version tag (e.g., v1.0.0)
       # This tag represents an official release version
@@ -94,7 +94,7 @@ jobs:
           # IMPORTANT: Deploys the semantic version tag (v1.0.0)
           # Format: mysampleacr.azurecr.io/sample-app:v1.0.0
           images: '${{ env.REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ env.RELEASE_TAG }}'
-          publish-profile: ${{ secrets.AZUREAPPSERVICE_PUBLISHPROFILE_999A64788F3249A485FB504B2AD16316 }}
+          publish-profile: ${{ secrets.PROD_WEBAPP_PUBLISHPROFILE }}
       
       # Log successful deployment with version information
       - name: Deployment summary

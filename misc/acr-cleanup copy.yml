@@ -1,0 +1,76 @@
+
+# ACR Cleanup Workflow: Manages container image retention in Azure Container Registry
+# This workflow implements a hybrid retention strategy:
+# - Keeps all semantic version tags (v*.*.* releases) forever
+# - Keeps only the last 5 ephemeral tags (branch-based and PR tags)
+# - Automatically deletes older ephemeral tags to save storage costs
+name: ACR - Hybrid Cleanup
+
+on:
+  schedule:
+    - cron: '0,30 * * * *'  # Runs every half hour (at minute 0 and 30 of each hour)
+  workflow_dispatch:      # Allows manual trigger from GitHub Actions UI
+
+# Environment variables used across all cleanup steps
+env:
+  REGISTRY: mysampleacr  # Azure Container Registry name
+  IMAGE_NAME: sample-app              # Docker image name
+  REPOSITORY: sample-app              # ACR repository name
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      # Authenticate with Azure using service principal credentials
+      - uses: azure/login@v1
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      # Step 1: Identify and preserve semantic version tags (e.g., v1.0.0, v2.1.3)
+      # These tags represent official releases and are kept forever for rollback capability
+      - name: List semantic tags (keep forever)
+        run: |
+          KEEP_TAGS=$(az acr repository show-tags \
+            --name ${{ env.REGISTRY }} \
+            --repository ${{ env.REPOSITORY }} \
+            --output tsv | grep '^v' || true)  # Filter tags starting with 'v'
+          echo "KEEP_TAGS=$KEEP_TAGS" >> $GITHUB_ENV
+
+      # Step 2: List all ephemeral tags (dev-xxx, main-xxx, pr-xxx, etc.)
+      # These are temporary tags created during CI/CD builds
+      - name: List ephemeral tags
+        run: |
+          EPHEMERAL_TAGS=$(az acr repository show-tags \
+            --name ${{ env.REGISTRY }} \
+            --repository ${{ env.REPOSITORY }} \
+            --orderby time_desc \
+            --output tsv | grep -v '^v' || true)  # Exclude semantic version tags (those starting with 'v')
+          echo "EPHEMERAL_TAGS=$EPHEMERAL_TAGS" >> $GITHUB_ENV
+
+      # Step 3: Delete old ephemeral tags, keeping only the 5 most recent
+      # This reduces ACR storage costs while maintaining recent build history
+      - name: Delete old ephemeral (keep last 5)
+        run: |
+          echo "$EPHEMERAL_TAGS" | tail -n +6 | while read TAG; do  # Skip first 5 tags (tail -n +6 means start from line 6)
+            [ -z "$TAG" ] && continue  # Skip empty lines
+            az acr repository delete --name ${{ env.REGISTRY }} --repository ${{ env.REPOSITORY }} --tag "$TAG" --yes
+          done
+
+      # Step 4: Generate a summary report of cleanup actions
+      - name: Upload cleanup summary
+        run: |
+          {
+            echo "Semantic tags kept:"
+            echo "$KEEP_TAGS"
+            echo "\nEphemeral tags kept:"
+            echo "$EPHEMERAL_TAGS" | head -n 5  # Show the 5 most recent ephemeral tags
+            echo "\nEphemeral tags deleted:"
+            echo "$EPHEMERAL_TAGS" | tail -n +6  # Show the deleted tags (6th tag onwards)
+          } > cleanup_summary.txt
+        shell: bash
+
+      # Step 5: Upload the cleanup summary as a workflow artifact for review
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cleanup-summary
+          path: cleanup_summary.txt
