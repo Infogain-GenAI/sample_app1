@@ -4,7 +4,7 @@
 # - Keeps all semantic version tags (v*.*.* releases) forever
 # - Keeps only the last 5 ephemeral tags (branch-based and PR tags)
 # - Automatically deletes older ephemeral tags to save storage costs
-name: ACR - Hybrid Cleanup
+name: ACR -  Cleanup
 
 on:
   schedule:
