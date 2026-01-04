@@ -1,0 +1,221 @@
+
+# Promote Dev Image to Release
+# Promotes latest dev build to production release in BOTH ACRs
+# - Keeps release copy in DEV ACR (for rollback/audit)
+# - Pushes release copy to PROD ACR (for production deployment)
+# - Deploys from PROD ACR to PROD App Service
+
+name: Promote Dev to Release (Both ACRs)
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'           # Triggers on semantic version tags (v1.0.0, v2.1.3, etc.)
+      - 'V*.*.*'           # Also triggers on uppercase semantic version tags (V1.0.0, V2.1.3, etc.)
+  workflow_dispatch:       # Allows manual trigger from GitHub Actions UI
+    inputs:
+      release_version:
+        description: 'Release version (e.g., v1.0.0, v2.1.3)'
+        required: true
+        type: string
+      dev_tag:
+        description: 'Dev tag to promote (leave empty for latest)'
+        required: false
+        type: string
+        default: 'latest'
+
+env:
+  DEV_REGISTRY: mysampleacr
+  PROD_REGISTRY: mysampleprodacr
+  IMAGE_NAME: sample-app
+
+jobs:
+  # Job 1: Promote to both ACRs
+  promote-to-both-acrs:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      # Free up disk space before starting
+      - name: Docker system prune before start
+        run: |
+          echo "Pruning unused Docker data before workflow..."
+          docker system prune -af --volumes
+
+      # Determine release version from tag push or manual input
+      - name: Set release version
+        run: |
+          # Check if triggered by tag push
+          if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == refs/tags/* ]]; then
+            # Extract version from tag
+            RELEASE_VERSION="${GITHUB_REF#refs/tags/}"
+            DEV_TAG="latest"
+            echo "Triggered by tag push: $RELEASE_VERSION"
+          else
+            # Use manual input
+            RELEASE_VERSION="${{ github.event.inputs.release_version }}"
+            DEV_TAG="${{ github.event.inputs.dev_tag }}"
+            echo "Triggered manually: $RELEASE_VERSION"
+          fi
+          
+          # Validate version format
+          if [[ ! "$RELEASE_VERSION" =~ ^[vV][0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9]+)?$ ]]; then
+            echo "Error: Invalid release version format. Expected: v1.0.0 or v1.0.0-beta"
+            exit 1
+          fi
+          
+          echo "Valid release version: $RELEASE_VERSION"
+          echo "Dev tag to promote: $DEV_TAG"
+          echo "RELEASE_VERSION=$RELEASE_VERSION" >> $GITHUB_ENV
+          echo "DEV_TAG=$DEV_TAG" >> $GITHUB_ENV
+
+      # Authenticate with DEV ACR
+      - name: Log in to DEV ACR
+        uses: docker/login-action@v2
+        with:
+          registry: ${{ env.DEV_REGISTRY }}.azurecr.io/
+          username: ${{ secrets.DEV_ACR_USERNAME }}
+          password: ${{ secrets.DEV_ACR_PASSWORD }}
+
+      # Authenticate with PROD ACR
+      - name: Log in to PROD ACR
+        uses: docker/login-action@v2
+        with:
+          registry: ${{ env.PROD_REGISTRY }}.azurecr.io/
+          username: ${{ secrets.PROD_ACR_USERNAME }}
+          password: ${{ secrets.PROD_ACR_PASSWORD }}
+
+      # Pull the tested dev image
+      - name: Pull dev image from DEV ACR
+        run: |
+          SOURCE_IMAGE="${{ env.DEV_REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ env.DEV_TAG }}"
+          
+          echo "Pulling tested image from DEV ACR..."
+          echo "Source: $SOURCE_IMAGE"
+          docker pull $SOURCE_IMAGE
+          
+          # Get image digest
+          IMAGE_DIGEST=$(docker inspect --format='{{index .RepoDigests 0}}' $SOURCE_IMAGE)
+          echo "IMAGE_DIGEST=$IMAGE_DIGEST" >> $GITHUB_ENV
+          echo " Image digest: $IMAGE_DIGEST"
+
+      # Tag for DEV ACR (keep release copy in DEV ACR)
+      - name: Tag release for DEV ACR
+        run: |
+          SOURCE_IMAGE="${{ env.DEV_REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ env.DEV_TAG }}"
+          
+          echo "Creating release tags in DEV ACR..."
+          
+          # Release version tag in DEV ACR
+          docker tag $SOURCE_IMAGE ${{ env.DEV_REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ env.RELEASE_VERSION }}
+          echo "  DEV: ${{ env.RELEASE_VERSION }}"
+
+      # Tag for PROD ACR (production release)
+      - name: Tag release for PROD ACR
+        run: |
+          SOURCE_IMAGE="${{ env.DEV_REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ env.DEV_TAG }}"
+          
+          echo "Creating release tags in PROD ACR..."
+          
+          # Tag 1: Semantic version
+          docker tag $SOURCE_IMAGE ${{ env.PROD_REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ env.RELEASE_VERSION }}
+          echo "  PROD: ${{ env.RELEASE_VERSION }}"
+          
+          # Tag 2: latest (production latest)
+          docker tag $SOURCE_IMAGE ${{ env.PROD_REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}:latest
+          echo "  PROD: latest"
+
+      # Push release to DEV ACR (keeps copy for audit/rollback)
+      - name: Push release to DEV ACR
+        run: |
+          echo "Pushing release to DEV ACR (backup copy)..."
+          docker push ${{ env.DEV_REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ env.RELEASE_VERSION }}
+          echo " Release ${{ env.RELEASE_VERSION }} saved in DEV ACR"
+
+
+      # Push release to PROD ACR (production use)
+      - name: Push release to PROD ACR
+        run: |
+          echo "Pushing release to PROD ACR (production)..."
+          docker push ${{ env.PROD_REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ env.RELEASE_VERSION }}
+          docker push ${{ env.PROD_REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}:latest
+          echo " Release ${{ env.RELEASE_VERSION }} pushed to PROD ACR"
+
+      # Free up disk space after pushing to PROD ACR
+      - name: Docker system prune after PROD push
+        run: |
+          echo "Pruning unused Docker data after PROD push..."
+          docker system prune -af --volumes
+
+      # Summary
+      - name: Promotion summary
+        run: |
+          echo "=== Promotion Complete ==="
+          echo ""
+          echo "Source:"
+          echo "   ${{ env.DEV_REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ env.DEV_TAG }}"
+          echo "   Digest: ${{ env.IMAGE_DIGEST }}"
+          echo ""
+          echo "DEV ACR (backup copy):"
+          echo "    ${{ env.DEV_REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ env.RELEASE_VERSION }}"
+          echo "    ${{ env.DEV_REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ env.DEV_TAG }} (kept)"
+          echo ""
+          echo "PROD ACR (production):"
+          echo "    ${{ env.PROD_REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ env.RELEASE_VERSION }}"
+          echo "    ${{ env.PROD_REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}:latest"
+          echo ""
+          echo " Release exists in BOTH ACRs"
+
+  # Job 2: Deploy from PROD ACR to PROD App Service
+  deploy-to-prod:
+    runs-on: ubuntu-latest
+    needs: promote-to-both-acrs
+    environment:
+      name: 'Production'
+      url: ${{ steps.deploy-to-webapp.outputs.webapp-url }}
+    
+    steps:
+      # Set release version from tag or manual input
+      - name: Set release version
+        run: |
+          # Check if triggered by tag push
+          if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == refs/tags/* ]]; then
+            RELEASE_VERSION="${GITHUB_REF#refs/tags/}"
+          else
+            RELEASE_VERSION="${{ github.event.inputs.release_version }}"
+          fi
+          echo "RELEASE_VERSION=$RELEASE_VERSION" >> $GITHUB_ENV
+          echo "Deploying to PROD App Service from PROD ACR: $RELEASE_VERSION"
+      
+      # Deploy to PROD Web App from PROD ACR
+      - name: Deploy to PROD App Service
+        id: deploy-to-webapp
+        uses: azure/webapps-deploy@v2
+        with:
+          app-name: 'mysamplewebappprod001'
+          slot-name: 'Production'
+          # Deploy from PROD ACR (not DEV ACR)
+          images: '${{ env.PROD_REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ env.RELEASE_VERSION }}'
+          publish-profile: ${{ secrets.PROD_WEBAPP_PUBLISHPROFILE }}
+      
+      # Deployment summary
+      - name: Deployment summary
+        run: |
+          echo " Production Deployment Complete"
+          echo ""
+          echo "PROD App Service: https://mysamplewebappprod001.azurewebsites.net"
+          echo "Image: ${{ env.PROD_REGISTRY }}.azurecr.io/${{ env.IMAGE_NAME }}:${{ env.RELEASE_VERSION }}"
+          echo "Release: ${{ env.RELEASE_VERSION }}"
+          echo ""
+          echo "Environment Separation:"
+          echo "   DEV ACR (${{ env.DEV_REGISTRY }}):"
+          echo "     - Dev builds: dev-*, main-*, pr-*"
+          echo "     - Release backup: ${{ env.RELEASE_VERSION }}"
+          echo ""
+          echo "   PROD ACR (${{ env.PROD_REGISTRY }}):"
+          echo "     - Production releases only: ${{ env.RELEASE_VERSION }}"
+          echo "     - Used by PROD App Service"
+          echo ""
+          echo "   DEV App Service: mysamplewebapp001"
+          echo "   PROD App Service: mysamplewebappprod001"

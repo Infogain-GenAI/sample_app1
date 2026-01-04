@@ -44,7 +44,7 @@ jobs:
             --cmd "acr purge --filter '${{ env.REPOSITORY }}:.*' --untagged --ago 2d --dry-run false" \
             /dev/null
           
-          echo "✅ Purge completed successfully"
+          echo " Purge completed successfully"
 
       # Show updated ACR storage usage after cleanup
       - name: Check storage usage (after cleanup)
