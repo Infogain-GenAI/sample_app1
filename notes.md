@@ -196,12 +196,12 @@ Test the cleanup workflows manually:
   - **GitHub UI:** Releases → Draft a new release → Create tag → Publish
     - Recommended for better visibility and release notes
 
-#### 3. ACR Tag Cleanup (acr-cleanup.yml)
+#### 3. ACR Tag Cleanup (cleanup_acr.yml)
 - **Location:** `.github/workflows/acr-cleanup.yml`
 - **Schedule:** Every 30 minutes
 - **Purpose:** Removes old ephemeral tags, keeps semantic versions
 
-#### 4. ACR Untagged Images Cleanup (acr-purge-untagged.yml)
+#### 4. ACR Untagged Images Cleanup (purge_acr_untagged.yml)
 - **Location:** `.github/workflows/acr-purge-untagged.yml`
 - **Schedule:** Daily at 2 AM UTC
 - **Purpose:** Removes orphaned image layers
@@ -246,7 +246,7 @@ git push
 
 ## Cleanup Workflows
 
-### 1. ACR Tag Cleanup (acr-cleanup.yml)
+### 1. ACR Tag Cleanup (cleanup_acr.yml)
 - **Schedule:** Daily at 3 AM UTC
 - **Purpose:** Removes old ephemeral tags, keeps semantic versions forever
 - **What it does:**
@@ -254,7 +254,7 @@ git push
   - Keeps only last 5 ephemeral tags (dev-xxx, main-xxx, pr-xxx)
   - Deletes older ephemeral tags to reduce storage costs
 
-### 2. ACR Untagged Images Cleanup (acr-purge-untagged.yml)
+### 2. ACR Untagged Images Cleanup (purge_acr_untagged.yml)
 - **Schedule:** Daily at 2 AM UTC
 - **Purpose:** Removes untagged manifests (orphaned image layers)
 - **What it does:**
@@ -273,7 +273,7 @@ git push
 **GitHub CLI:**
 ```bash
 # Tag cleanup
-gh workflow run "ACR - Hybrid Cleanup" --ref dev
+gh workflow run "ACR - Cleanup" --ref dev
 
 # Untagged images cleanup
 gh workflow run "ACR - Purge Untagged Images" --ref dev
@@ -397,3 +397,64 @@ jobs:
 ✅ This setup avoids unnecessary builds when unrelated files (like docs or README) are changed.  
 
 Would you like me to extend this sample to also include a **scheduled nightly build (`on.schedule`)** so you can catch issues even if no one pushes code during the day?
+
+## ACR Cleanup & Purge Scripts and Workflows
+
+- **Script Names Updated:**
+    - Tag cleanup script: `infra/cleanup_acr.sh`
+    - Untagged manifest purge script: `infra/purge_acr.sh`
+- **Workflow Names Updated:**
+    - Tag cleanup workflow: `.github/workflows/cleanup-acr.yml`
+    - Untagged manifest purge workflow: `.github/workflows/purge-acr-untagged.yml`
+- **Azure CLI Syntax Fix:**
+    - Tag deletion now uses: `az acr repository delete --name <ACR> --image <REPO>:<TAG> --yes`
+    - Previous (incorrect) usage: `--tag <TAG>` (now fixed)
+- **Retention Logic:**
+    - All semantic version tags (`v*.*.*` or `V*.*.*`, case-insensitive) are kept forever
+    - Only the most recent 5 ephemeral tags are retained; older ephemeral tags are deleted
+    - Untagged manifests are purged daily if older than 2 days
+- **Script Output:**
+    - Tag cleanup script now prints errors for failed deletions and shows which tags are kept/deleted
+    - Purge script shows manifest-level summary (untagged images)
+
+## Infrastructure Scripts Summary & Usage
+
+### 1. `infra/create-resources.sh`
+- **Purpose:** Provision Azure resources (ACR, App Service Plan, Web App) for dev/prod.
+- **Usage:**
+    ```bash
+    bash infra/create-resources.sh
+    # Or with custom names:
+    export WEBAPP_NAME="myapp$(date +%s)"
+    export ACR_NAME="myacr$(date +%s)"
+    bash infra/create-resources.sh
+    ```
+- **Troubleshooting:**
+    - Ensure Azure CLI is installed and logged in (`az login`)
+    - Use alphanumeric names for ACR
+
+### 2. `infra/cleanup_acr.sh`
+- **Purpose:** Remove old ephemeral tags from ACR, keep semantic versions forever.
+- **Usage:**
+    ```bash
+    bash infra/cleanup_acr.sh <REGISTRY_NAME> <REPOSITORY_NAME> <KEEP_COUNT>
+    # Example:
+    bash infra/cleanup_acr.sh mysampleacr sample-app 5
+    ```
+- **Troubleshooting:**
+    - Must have `AcrDelete` or `Contributor` role
+    - Run `az login` before running
+    - Script prints errors for failed deletions
+
+### 3. `infra/purge_acr.sh`
+- **Purpose:** Remove untagged manifests (orphaned layers) from ACR older than N days.
+- **Usage:**
+    ```bash
+    bash infra/purge_acr.sh <REGISTRY_NAME> <REPOSITORY_NAME> <AGO_DAYS> [--dry-run]
+    # Example:
+    bash infra/purge_acr.sh mysampleacr sample-app 2 --dry-run
+    ```
+- **Troubleshooting:**
+    - Must have `AcrDelete` or `Contributor` role
+    - Run `az login` before running
+    - Only shows manifest-level summary (untagged images)

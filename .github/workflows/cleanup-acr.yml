@@ -58,8 +58,8 @@ jobs:
         run: |
           echo "$EPHEMERAL_TAGS" | tail -n +6 | while read TAG; do  # Skip first 5 tags (tail -n +6 means start from line 6)
             [ -z "$TAG" ] && continue  # Skip empty lines
-            az acr repository delete --name ${{ env.REGISTRY }} --repository ${{ env.REPOSITORY }} --tag "$TAG" --yes
-          done
+            az acr repository delete --name ${{ env.REGISTRY }} --image ${{ env.REPOSITORY }}:$TAG --yes
+           done
 
       # Step 4: Generate a summary report of cleanup actions
       - name: Generate cleanup summary

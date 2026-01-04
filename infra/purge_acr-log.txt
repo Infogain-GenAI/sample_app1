@@ -1,0 +1,70 @@
+$ ./purge_acr.sh mysampleacr sample-app 5
+=== ACR Purge Untagged Images ===
+Registry: mysampleacr
+Repository: sample-app
+Age threshold: Older than 5 days
+Mode: LIVE (will delete)
+
+Checking Azure login status...
+ Logged in to Azure
+  Subscription: IGNIS
+
+Verifying ACR access...
+ ACR access verified
+  SKU: Standard
+
+Verifying repository...
+ Repository exists
+
+Storage usage BEFORE purge:
+NAME                    LIMIT           CURRENT VALUE    UNIT
+----------------------  --------------  ---------------  ------
+Size                    107374182400    482296468        Bytes
+MaximumStorageCapacity  43980465111040  482296468        Bytes
+Webhooks                10              0                Count
+ScopeMaps               500             0                Count
+Tokens                  500             0                Count
+
+Running ACR purge...
+
+Command: acr purge --filter 'sample-app:.*' --untagged --ago 5d --dry-run false
+
+Queued a run with ID: cu8
+Waiting for an agent...
+2026/01/04 09:13:10 Alias support enabled for version >= 1.1.0, please see https://aka.ms/acr/tasks/task-aliases for more information.
+2026/01/04 09:13:10 Creating Docker network: acb_default_network, driver: 'bridge'
+2026/01/04 09:13:10 Successfully set up Docker network: acb_default_network
+2026/01/04 09:13:10 Setting up Docker configuration...
+2026/01/04 09:13:11 Successfully set up Docker configuration
+2026/01/04 09:13:11 Logging in to registry: mysampleacr.azurecr.io
+2026/01/04 09:13:12 Successfully logged into mysampleacr.azurecr.io
+2026/01/04 09:13:12 Executing step ID: acb_step_0. Timeout(sec): 600, Working directory: '', Network: 'acb_default_network'
+2026/01/04 09:13:12 Launching container with name: acb_step_0
+DRY RUN: The following output shows what WOULD be deleted if the purge command was executed. Nothing is deleted.
+Would delete tags for repository: sample-app
+Would delete manifests for repository: sample-app
+
+Number of tags to be deleted: 0
+Number of manifests to be deleted: 0
+2026/01/04 09:13:14 Successfully executed container: acb_step_0
+2026/01/04 09:13:14 Step ID: acb_step_0 marked as successful (elapsed time in seconds: 1.871331)
+
+Run ID: cu8 was successful after 4s
+
+Storage usage AFTER purge:
+NAME                    LIMIT           CURRENT VALUE    UNIT
+----------------------  --------------  ---------------  ------
+Size                    107374182400    482296468        Bytes
+MaximumStorageCapacity  43980465111040  482296468        Bytes
+Webhooks                10              0                Count
+ScopeMaps               500             0                Count
+Tokens                  500             0                Count
+
+ Purge completed successfully
+
+=== Summary ===
+Registry: mysampleacr
+Repository: sample-app
+Untagged images older than: 5 days
+Mode: Live deletion
+
