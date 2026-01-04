@@ -10,7 +10,7 @@
 # reopened → Triggered when a previously closed pull request is reopened.
 
 
-name: Build and deploy container app to Azure Web App - mysamplewebapp001
+name: Build and deploy container app to Azure Web App - mysamplewebapp001-prod
 
 on:
   push:
