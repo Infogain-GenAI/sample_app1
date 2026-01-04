@@ -89,12 +89,12 @@ if [ -z "$ALL_TAGS" ]; then
     exit 0
 fi
 
-# Separate semantic version tags (v*.*.* - these are kept forever)
-SEMANTIC_TAGS=$(echo "$ALL_TAGS" | grep '^v' || true)
+# Separate semantic version tags (v*.*.* or V*.*.* - these are kept forever)
+SEMANTIC_TAGS=$(echo "$ALL_TAGS" | grep -i '^v' || true)
 SEMANTIC_COUNT=$(echo "$SEMANTIC_TAGS" | grep -c . || echo 0)
 
 # Separate ephemeral tags (dev-xxx, main-xxx, pr-xxx, etc.)
-EPHEMERAL_TAGS=$(echo "$ALL_TAGS" | grep -v '^v' | grep -v '^latest$' || true)
+EPHEMERAL_TAGS=$(echo "$ALL_TAGS" | grep -vi '^v' | grep -v '^latest$' || true)
 EPHEMERAL_COUNT=$(echo "$EPHEMERAL_TAGS" | grep -c . || echo 0)
 
 echo -e "${GREEN} Found tags:${NC}"
