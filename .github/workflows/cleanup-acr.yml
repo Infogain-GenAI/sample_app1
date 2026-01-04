@@ -31,14 +31,14 @@ jobs:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
           enable-AzPSSession: false
 
-      # Step 1: Identify and preserve semantic version tags (e.g., v1.0.0, v2.1.3)
+      # Step 1: Identify and preserve semantic version tags (e.g., v1.0.0, V1.0.0, v2.1.3)
       # These tags represent official releases and are kept forever for rollback capability
       - name: List semantic tags (keep forever)
         run: |
           KEEP_TAGS=$(az acr repository show-tags \
             --name ${{ env.REGISTRY }} \
             --repository ${{ env.REPOSITORY }} \
-            --output tsv | grep '^v' || true)  # Filter tags starting with 'v'
+            --output tsv | grep -i '^v' || true)  # Filter tags starting with 'v' or 'V' (case-insensitive)
           echo "KEEP_TAGS=$KEEP_TAGS" >> $GITHUB_ENV
 
       # Step 2: List all ephemeral tags (dev-xxx, main-xxx, pr-xxx, etc.)
@@ -49,7 +49,7 @@ jobs:
             --name ${{ env.REGISTRY }} \
             --repository ${{ env.REPOSITORY }} \
             --orderby time_desc \
-            --output tsv | grep -v '^v' || true)  # Exclude semantic version tags (those starting with 'v')
+            --output tsv | grep -vi '^v' || true)  # Exclude semantic version tags (those starting with 'v' or 'V' - case-insensitive)
           echo "EPHEMERAL_TAGS=$EPHEMERAL_TAGS" >> $GITHUB_ENV
 
       # Step 3: Delete old ephemeral tags, keeping only the 5 most recent
@@ -58,8 +58,8 @@ jobs:
         run: |
           echo "$EPHEMERAL_TAGS" | tail -n +6 | while read TAG; do  # Skip first 5 tags (tail -n +6 means start from line 6)
             [ -z "$TAG" ] && continue  # Skip empty lines
-            az acr repository delete --name ${{ env.REGISTRY }} --repository ${{ env.REPOSITORY }} --tag "$TAG" --yes
-          done
+            az acr repository delete --name ${{ env.REGISTRY }} --image ${{ env.REPOSITORY }}:$TAG --yes
+           done
 
       # Step 4: Generate a summary report of cleanup actions
       - name: Generate cleanup summary

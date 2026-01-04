@@ -1,0 +1,85 @@
+$ ./cleanup_acr.sh mysampleacr sample-app 15
+=== ACR Cleanup ===
+Registry: mysampleacr
+Repository: sample-app
+Keep last: 15 ephemeral tags
+
+Checking Azure login status...
+ Logged in to Azure
+  Subscription: IGNIS
+
+Verifying ACR access...
+ ACR access verified
+
+Verifying repository...
+ Repository exists
+
+Step 1: Analyzing tags...
+ Found tags:
+  Semantic versions (kept forever): 3
+  Ephemeral tags (keep last 15): 24
+
+ Found 9 ephemeral tags to delete
+
+=== KEEPING (Never Deleted) ===
+All semantic version tags (3):
+  ✓ V1.0.2
+  ✓ V1.0.1
+  ✓ v1.0.0
+
+Last 15 ephemeral tags:
+  ✓ dev-f10fffb239c15c98edd572dab86ac490083395b5
+  ✓ dev-031ffe3626a3b92c604e97cba5228a37834d2160
+  ✓ dev-5e844d28f15d8ec62d98311d6e72eff9a21212c6
+  ✓ dev-d1fbfdb6814abb9a8555e444c45b06ee2ae8df9b
+  ✓ dev-066332d3bd8ea27b9b85248eb28f0c5d6cf4ef4d
+  ✓ dev-57f1050152f9733ac663dc9c69bb93dbe93ca8b3
+  ✓ dev-3cc1b0c6d0fcf63108d1f395f9cc7b8aa82db9f4
+  ✓ dev-09280630dc79cc7245e1640935fede1dfcfbb9b4
+  ✓ dev-b3f35db7ebcda431bfa9091cabb5ca1025a8f397
+  ✓ main-5d6aaa81faeb78f341811a57af387b4123fd9a59
+  ✓ dev-a9fe191cc4368581a5651542f72b3676ce8ab129
+  ✓ dev-f58148fec52e3accf3b27f8d76c74a39e9924b9d
+  ✓ main-f527468f2fb46b4d4ab6657c824b056040aa4525
+  ✓ 4-merge-87ec1152aa27f67f95948a712f29e07fe3b51edd
+  ✓ dev-0169eb5e5db66a89c3ea21000d680e8d66644814
+
+=== DELETING (Older Ephemeral) ===
+  ✗ main-ca566c102fd61eaf9193c5be67c4a9aad91a2013
+  ✗ 3-merge-f9ed2a5b360e952ac0b216a345354d567435d361
+  ✗ dev-5f01cb6daec6c851dda8f03078a5b82c703565c5
+  ✗ dev-bf3fbb296296d299229becaf0c16ef427236ee4e
+  ✗ 7726378748ccb189f2ff1b582a0f5feaad4d321c
+  ✗ main-7726378748ccb189f2ff1b582a0f5feaad4d321c
+  ✗ dev-b967a0f99cc719c8f77dd1a841ccd8b11b18e36f
+  ✗ dev-39560719f33b4635171cc26a44f2f97480ec818b
+  ✗ dev-af78dfc8c2c11e618ba84e67523808ef144c8de7
+
+Press Enter to continue with deletion, or Ctrl+C to cancel...
+
+Step 5: Deleting old ephemeral tags...
+  Deleting tag: main-ca566c102fd61eaf9193c5be67c4a9aad91a2013 ... ✓
+  Deleting tag: 3-merge-f9ed2a5b360e952ac0b216a345354d567435d361 ... ✓
+  Deleting tag: dev-5f01cb6daec6c851dda8f03078a5b82c703565c5 ... ✓
+  Deleting tag: dev-bf3fbb296296d299229becaf0c16ef427236ee4e ... ✓
+  Deleting tag: 7726378748ccb189f2ff1b582a0f5feaad4d321c ... ✓
+  Deleting tag: main-7726378748ccb189f2ff1b582a0f5feaad4d321c ... ✓
+  Deleting tag: dev-b967a0f99cc719c8f77dd1a841ccd8b11b18e36f ... ✓
+  Deleting tag: dev-39560719f33b4635171cc26a44f2f97480ec818b ... ✓
+  Deleting tag: dev-af78dfc8c2c11e618ba84e67523808ef144c8de7 ... ✓
+
+=== Cleanup Summary ===
+Semantic versions kept: 3
+Ephemeral tags kept: 15
+Ephemeral tags deleted: 9
+
+Current ACR storage usage:
+NAME                    LIMIT           CURRENT VALUE    UNIT
+----------------------  --------------  ---------------  ------
+Size                    107374182400    482296468        Bytes
+MaximumStorageCapacity  43980465111040  482296468        Bytes
+Webhooks                10              0                Count
+ScopeMaps               500             0                Count
+Tokens                  500             0                Count
+
+Cleanup completed successfully
