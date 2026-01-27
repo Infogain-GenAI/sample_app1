@@ -37,7 +37,7 @@ app.add_middleware( CORSMiddleware, allow_origins=["*"], allow_methods=["*"], al
 def list_todos():
     db = SessionLocal()
     return [{"id": t.id, "title": t.title} for t in db.query(Todo).all()]
-##
+# Create a new todo item
 
 @app.post("/api/todos")
 def create_todo(title: str):
