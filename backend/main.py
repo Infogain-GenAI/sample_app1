@@ -6,6 +6,7 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import Column, Integer, String, create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 
+test_var = 'xyt'
 APP_NAME = os.getenv("APP_NAME", "sample-app")
 DB_PATH = os.getenv("DB_PATH", "data/app.db")
 SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret")
@@ -29,16 +30,14 @@ class Todo(Base):
 Base.metadata.create_all(bind=engine)
 app = FastAPI(title=APP_NAME)
 
-app.add_middleware(
-    CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]
-)
+app.add_middleware( CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"] )
 
 
 @app.get("/api/todos")
 def list_todos():
     db = SessionLocal()
     return [{"id": t.id, "title": t.title} for t in db.query(Todo).all()]
-
+##
 
 @app.post("/api/todos")
 def create_todo(title: str):
