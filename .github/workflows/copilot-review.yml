@@ -15,6 +15,7 @@ jobs:
         uses: github/copilot-review-action@latest
         with:
           github-token: ${{ secrets.SAT_GITHUB_TOKEN }}
+
           # Configurable categories
           enable-security-checks: true
           enable-style-checks: true
