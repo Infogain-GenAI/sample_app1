@@ -30,9 +30,12 @@ class Todo(Base):
 Base.metadata.create_all(bind=engine)
 app = FastAPI(title=APP_NAME)
 
-app.add_middleware( CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"] )
-
-
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 @app.get("/api/todos")
 def list_todos():
     db = SessionLocal()
