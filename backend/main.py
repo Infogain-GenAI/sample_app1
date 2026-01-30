@@ -11,10 +11,10 @@ DB_PATH = os.getenv("DB_PATH", "data/app.db")
 SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret")
 PORT = int(os.getenv("PORT", "8000"))
 
-os.makedirs(os.path.dirname(DB_PATH) or ".", exist_ok=True)
+os.makedirs(os.path.dirname(DB_PATH) or ".",
+            exist_ok=True)
 
-engine = create_engine( 
-    f"sqlite:///{DB_PATH}", connect_args={"check_same_thread": False}
+engine = create_engine(  f"sqlite:///{DB_PATH}", connect_args={"check_same_thread": False}
 ) 
 SessionLocal = sessionmaker(bind=engine)
 Base = declarative_base()
