@@ -9,7 +9,7 @@ from sqlalchemy.orm import declarative_base, sessionmaker
 APP_NAME = os.getenv("APP_NAME", "sample-app")
 DB_PATH = os.getenv("DB_PATH", "data/app.db")
 SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret")
-PORT = int(os.getenv("PORT", "8000"))
+PORT = int(os.getenv("PORT", "8000")) 
 
 os.makedirs(os.path.dirname(DB_PATH) or ".",
             exist_ok=True)
@@ -29,8 +29,7 @@ class Todo(Base):
 Base.metadata.create_all(bind=engine)
 app = FastAPI(title=APP_NAME)
 
-app.add_middleware(
-    CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]
+app.add_middleware(    CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]
 )
 
 
