@@ -27,8 +27,12 @@ jobs:
         runs-on: ubuntu-latest
         env:
             # Configuration (modify these values as needed)
-            LLM_MODEL: <YOUR_LLM_MODEL>
-            LLM_BASE_URL: <YOUR_LLM_BASE_URL>
+            # LLM model to use, e.g. 'gpt-4o-mini', 'gpt-4', 'claude-3-opus'.
+            # You can also configure this via a repository variable (e.g. vars.LLM_MODEL).
+            LLM_MODEL: gpt-4o-mini
+            # Optional base URL for self-hosted / OpenAI-compatible endpoints, e.g. 'https://api.openai.com/v1'.
+            # Leave empty to use the default endpoint for your chosen provider.
+            LLM_BASE_URL: ''
             # Review style: 'standard' for pragmatic review, 'roasted' for Linus-style
             REVIEW_STYLE: standard
             # PR context will be automatically provided by the agent script
