@@ -13,14 +13,14 @@ PORT = int(os.getenv("PORT", "8000"))
 
 os.makedirs(os.path.dirname(DB_PATH) or ".", exist_ok=True)
 
-engine = create_engine(
+engine = create_engine( 
     f"sqlite:///{DB_PATH}", connect_args={"check_same_thread": False}
-)
+) 
 SessionLocal = sessionmaker(bind=engine)
 Base = declarative_base()
 
 
-class Todo(Base):
+class Todo(Base): 
     __tablename__ = "todos"
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String, nullable=False)
@@ -35,7 +35,7 @@ app.add_middleware(
 
 
 @app.get("/api/todos")
-def list_todos():
+def list_todos(): 
     db = SessionLocal()
     return [{"id": t.id, "title": t.title} for t in db.query(Todo).all()]
 
