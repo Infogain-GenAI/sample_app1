@@ -130,6 +130,7 @@ jobs:
             - name: Check required configuration
               env:
                   LLM_API_KEY: ${{ secrets.LLM_API_KEY }}
+                  GITHUB_TOKEN: ${{ secrets.SAT_GITHUB_TOKEN }}
               run: |
                   if [ -z "$LLM_API_KEY" ]; then
                     echo "Error: LLM_API_KEY secret is not set."
