@@ -9,18 +9,18 @@ from sqlalchemy.orm import declarative_base, sessionmaker
 APP_NAME = os.getenv("APP_NAME", "sample-app")
 DB_PATH = os.getenv("DB_PATH", "data/app.db")
 SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret")
-PORT = int(os.getenv("PORT", "8000")) 
+PORT = int(os.getenv("PORT", "8000"))
 
-os.makedirs(os.path.dirname(DB_PATH) or ".",
-            exist_ok=True)
+os.makedirs(os.path.dirname(DB_PATH) or ".", exist_ok=True)
 
-engine = create_engine(  f"sqlite:///{DB_PATH}", connect_args={"check_same_thread": False}
-) 
+engine = create_engine(
+    f"sqlite:///{DB_PATH}", connect_args={"check_same_thread": False}
+)
 SessionLocal = sessionmaker(bind=engine)
 Base = declarative_base()
 
 
-class Todo(Base): 
+class Todo(Base):
     __tablename__ = "todos"
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String, nullable=False)
@@ -29,12 +29,13 @@ class Todo(Base):
 Base.metadata.create_all(bind=engine)
 app = FastAPI(title=APP_NAME)
 
-app.add_middleware(    CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]
+app.add_middleware(
+    CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"]
 )
 
 
 @app.get("/api/todos")
-def list_todos(): 
+def list_todos():
     db = SessionLocal()
     return [{"id": t.id, "title": t.title} for t in db.query(Todo).all()]
 
@@ -49,6 +50,12 @@ def create_todo(title: str):
     db.commit()
     db.refresh(todo)
     return {"id": todo.id, "title": todo.title}
+    # sdd
+    ##@ \\
+
+    ## TODO health api
+
+    app.append
 
 
 # Mount static files LAST so API routes take precedence
