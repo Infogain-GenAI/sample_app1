@@ -11,9 +11,6 @@ on:
     # Manual trigger
     workflow_dispatch:
     # Scheduled trigger (disabled by default, uncomment and customize as needed)
-    schedule:
-      # Run at 12 PM UTC every day
-        - cron: 0 12 * * *
 
 permissions:
     contents: write
