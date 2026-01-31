@@ -70,9 +70,80 @@ jobs:
 
             - name: Install GitHub CLI
               run: |
-                  # Install GitHub CLI for posting review comments
-                  sudo apt-get update
-                  sudo apt-get install -y gh
+                # Install GitHub CLI for posting review comments
+                sudo apt-get update
+                sudo apt-get install -y gh
+                # Replace gh with a safe wrapper that posts review payloads via JSON
+                # This avoids shell-quoting issues when the agent builds large/multiline bodies
+                sudo mv /usr/bin/gh /usr/bin/gh.real || true
+                cat > /usr/local/bin/gh << 'PY'
+                #!/usr/bin/env python3
+                import sys, os, json, subprocess, re
+                args = sys.argv[1:]
+                joined = ' '.join(args)
+                try:
+                    is_review_post = 'api' in args and 'pulls' in joined and 'reviews' in joined and '-X' in args and 'POST' in args
+                except Exception:
+                    is_review_post = False
+                if is_review_post:
+                    payload = {}
+                    comments = []
+                    i = 0
+                    while i < len(args):
+                        a = args[i]
+                        if a == '-f' and i + 1 < len(args):
+                            kv = args[i+1]
+                            if '=' in kv:
+                                k, v = kv.split('=', 1)
+                                v = v.strip("'\"")
+                                m = re.match(r"comments\[\]\[(.+)\]", k)
+                                if m:
+                                    keyname = m.group(1)
+                                    if not comments or keyname in comments[-1]:
+                                        comments.append({})
+                                    comments[-1][keyname] = v
+                                elif k.startswith('comments'):
+                                    comments.append(v)
+                                else:
+                                    payload[k] = v
+                            i += 2
+                        else:
+                            i += 1
+                    if comments:
+                        payload['comments'] = comments
+                    # Find the repos/... path to construct API URL
+                    repo_path = None
+                    for p in args:
+                        if p.startswith('repos/'):
+                            repo_path = p
+                            break
+                    if not repo_path:
+                        print('Could not determine repo path for gh api call', file=sys.stderr)
+                        sys.exit(2)
+                    api_url = 'https://api.github.com/' + repo_path
+                    token = os.environ.get('GITHUB_TOKEN') or os.environ.get('GH_TOKEN')
+                    if not token:
+                        print('GITHUB_TOKEN not found in environment', file=sys.stderr)
+                        sys.exit(3)
+                    cmd = [
+                        'curl', '-sS', '-X', 'POST',
+                        '-H', f'Authorization: token {token}',
+                        '-H', 'Accept: application/vnd.github+json',
+                        '-H', 'Content-Type: application/json',
+                        '-d', json.dumps(payload),
+                        api_url,
+                    ]
+                    rc = subprocess.call(cmd)
+                    sys.exit(rc)
+                else:
+                    # Delegate to the real gh binary for all other commands
+                    gh_real = '/usr/bin/gh.real'
+                    if not os.path.exists(gh_real):
+                        # fallback to system gh if we didn't move it
+                        gh_real = '/usr/bin/gh'
+                    os.execv(gh_real, [gh_real] + args)
+                PY
+                sudo chmod +x /usr/local/bin/gh
 
             - name: Install OpenHands dependencies
               run: |
