@@ -5,7 +5,7 @@
 #  3. Add your LLM_API_KEY to the repository secrets
 #  4. Commit this file to your repository
 #  5. Trigger the workflow manually or set up a schedule
-name: Assign Reviews
+name: Open Hands Assign Reviews
 
 on:
     # Manual trigger
@@ -22,7 +22,7 @@ permissions:
 
 jobs:
     run-task:
-        runs-on: blacksmith-4vcpu-ubuntu-2404
+        runs-on: ubuntu-latest
         env:
             # Configuration (modify these values as needed)
             AGENT_SCRIPT_URL: https://raw.githubusercontent.com/OpenHands/agent-sdk/main/examples/03_github_workflows/01_basic_action/agent_script.py
