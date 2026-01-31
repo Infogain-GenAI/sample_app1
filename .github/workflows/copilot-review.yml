@@ -1,1 +1,19 @@
 
+# test
+name: test chekc
+
+on:
+  workflow_dispatch:      # Allows manual trigger from GitHub Actions UI
+
+# Environment variables used across all cleanup steps
+env:
+  REGISTRY: mysampleacr  # Azure Container Registry name
+  IMAGE_NAME: sample-app              # Docker image name
+  REPOSITORY: sample-app              # ACR repository name
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read              # Required for checkout operations
+      id-token: write             # Required for Azure login with OIDC
