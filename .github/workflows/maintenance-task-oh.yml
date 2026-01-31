@@ -25,7 +25,8 @@ jobs:
             AGENT_SCRIPT_URL: https://raw.githubusercontent.com/OpenHands/agent-sdk/main/examples/03_github_workflows/01_basic_action/agent_script.py
             # Provide either PROMPT_LOCATION (URL/file) OR PROMPT_STRING (direct text), not both
             # Option 1: Use a URL or file path for the prompt
-            PROMPT_LOCATION: 'https://gist.github.com/sati-infogain/1259b68b4fa350c322b6fe3e23763ae7#file-prompt-txt'
+            # PROMPT_LOCATION: 'https://gist.github.com/sati-infogain/1259b68b4fa350c322b6fe3e23763ae7#file-prompt-txt'
+            PROMPT_LOCATION: ''
             # PROMPT_LOCATION: 'https://example.com/prompts/maintenance.txt'
             # Option 2: Use direct text for the prompt
             PROMPT_STRING: >
